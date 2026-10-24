@@ -1,22 +1,34 @@
 # Minimal TV Launcher
 
-A home screen for Android TV / Xiaomi TV with three looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
+A home screen for Android TV / Xiaomi TV with four looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
 
 ## Apartment (default)
 
-A modern, minimal launcher. A 3D model of Apartment 028 slowly turns in the background, one full turn every 2½ minutes. On top of it:
+A modern, minimal launcher. A 3D model of the apartment slowly turns in the background, one full turn every 2½ minutes. On top of it:
 
 - a large clock and the date in the top-left
+- today's weather, e.g. "11° · Mainly clear · Sunset 17:58"
 - your apps as a row of names along the bottom
 - a settings button (gear) at the bottom right
 
-The model is the three.js scene from *Apartment 028*, unchanged except that the controls and panel are replaced by an automatic orbit (`web/apartment.js`). It runs in a WebView from files inside the app, so it needs no internet. It pauses while another app is open. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
+The model follows the real time in Riga: the sun sits where it really is, so shadows move through the day and it gets dark at the real sunset, when the lamps glow inside. It also shows the live weather around the building: rain, snow and thunder flashes, with a wet terrace after rain.
+
+The model is the three.js scene from *Apartment 95* (`web/apartment.js`). Only its controls and panel are replaced, by an automatic camera. It runs in a WebView from files inside the app, and it pauses while another app is open. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
 
 - **Left/Right** moves along the apps. **OK** opens one; **long-press OK** opens its info page.
 - **Gear** (or **Menu** on the remote) opens a menu:
   - **TV settings**
-  - **Change launcher**, where you can pick Apartment, Monkey Island or Vinyl
+  - **Edit apps**
+  - **Change launcher**, where you can pick Apartment, Window, Monkey Island or Vinyl
 - **Back** closes the menu.
+
+## Window
+
+The same model, seen from the living room looking out through the glazed terrace door: the sky, the terrace and the weather outside, live. It shows blue sky or drifting clouds, rain, snow, fog, the sunset's colours at the real time, and stars at night. The camera drifts very slightly. The clock, weather, apps and menu are the same as in Apartment.
+
+## Live weather
+
+Both Apartment and Window get current conditions and today's sunrise and sunset for Brīvības iela 95, Riga, from [Open-Meteo](https://open-meteo.com/). It's free and needs no account or key. The launcher fetches them when it appears and every 15 minutes while it's on screen. Without internet, the scene keeps its last conditions and the weather line is hidden.
 
 ## Monkey Island
 
@@ -70,7 +82,7 @@ Until you do, the launcher shows this command on screen.
 
 **From your phone:** see below. The phone page can also rename apps.
 
-All three launchers use the same list. In Monkey Island there are 6 apps per inventory page, and the arrows scroll if there are more. The list starts from `res/values/apps.xml` (`Name|package,package`) until you first edit it.
+All the launchers use the same list. In Monkey Island there are 6 apps per inventory page, and the arrows scroll if there are more. The list starts from `res/values/apps.xml` (`Name|package,package`) until you first edit it.
 
 ## Phone page
 

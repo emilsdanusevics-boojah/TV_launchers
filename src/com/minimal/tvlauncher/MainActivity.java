@@ -28,8 +28,8 @@ import java.util.List;
  */
 public class MainActivity extends Activity implements NowPlaying.Listener, Remote.Listener {
 
-    static final String[] LAUNCHER_IDS = {"apartment", "monkey_island", "vinyl"};
-    static final String[] LAUNCHER_NAMES = {"Apartment", "Monkey Island", "Vinyl"};
+    static final String[] LAUNCHER_IDS = {"apartment", "window", "monkey_island", "vinyl"};
+    static final String[] LAUNCHER_NAMES = {"Apartment", "Window", "Monkey Island", "Vinyl"};
     private static final String DEFAULT_LAUNCHER = "apartment";
 
     private static final long PAUSED_COUNTS_AS_STOPPED_MS = 30000;
@@ -85,8 +85,10 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             base = new MonkeyIslandTheme(this);
         } else if ("vinyl".equals(launcher)) {
             base = new VinylTheme(this);
+        } else if ("window".equals(launcher)) {
+            base = new ApartmentTheme(this, true);
         } else {
-            base = new ApartmentTheme(this);
+            base = new ApartmentTheme(this, false);
         }
         container = new FrameLayout(this);
         baseView = base.createView();

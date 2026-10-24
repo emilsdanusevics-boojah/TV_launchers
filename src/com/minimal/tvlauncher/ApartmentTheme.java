@@ -5,6 +5,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
+import android.os.Handler;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.format.DateFormat;
@@ -16,6 +17,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -26,11 +28,17 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * A modern, minimal launcher: a slowly turning 3D model of the apartment fills the screen
- * (three.js in a WebView, bundled in assets/apartment), with the clock, the apps and a
- * settings button laid over it. Colours and type follow the original Apartment 028 page.
+ * A modern, minimal launcher: the 3D model of the apartment fills the screen (three.js in a
+ * WebView, bundled in assets/apartment), with the clock, today's weather, the apps and a
+ * settings button laid over it. Colours and type follow the original Apartment page.
+ *
+ * Two views of the same model: "Apartment" slowly turns around the flat seen from above;
+ * "Window" looks out of the living room's terrace door. Both show the live weather in Riga
+ * (rain, snow, clouds, the sun at its real position) from Open-Meteo.
  */
 class ApartmentTheme implements LauncherTheme {
+
+    private static final long WEATHER_EVERY_MS = 15 * 60 * 1000;
 
     private static final int SCENE = 0xFF1D1E20;
     private static final int FG = 0xFFECEBE8;
@@ -41,11 +49,14 @@ class ApartmentTheme implements LauncherTheme {
     private static final int LINE = 0x24ECEBE8;
 
     private final MainActivity activity;
+    private final boolean windowView;
+    private final Handler handler = new Handler();
     private Typeface light;
     private Typeface medium;
     private WebView web;
     private TextView time;
     private TextView date;
+    private TextView weatherLine;
     private LinearLayout bar;
     private LinearLayout appRow;
     private ImageView gear;
@@ -54,8 +65,18 @@ class ApartmentTheme implements LauncherTheme {
     private LinearLayout menuItems;
     private TextView menuFooter;
 
-    ApartmentTheme(MainActivity activity) {
+    private final Runnable weatherTimer = new Runnable() {
+        @Override
+        public void run() {
+            refreshWeather();
+            handler.postDelayed(this, WEATHER_EVERY_MS);
+        }
+    };
+
+    /** {@code windowView}: look out of the terrace door instead of circling the flat. */
+    ApartmentTheme(MainActivity activity, boolean windowView) {
         this.activity = activity;
+        this.windowView = windowView;
     }
 
     private int dp(float v) {
@@ -80,7 +101,13 @@ class ApartmentTheme implements LauncherTheme {
             WebSettings ws = web.getSettings();
             ws.setJavaScriptEnabled(true);
             ws.setAllowFileAccess(true);
-            web.loadUrl("file:///android_asset/apartment/index.html");
+            web.setWebViewClient(new WebViewClient() {
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    pushWeather(Weather.cached());
+                }
+            });
+            web.loadUrl("file:///android_asset/apartment/index.html" + (windowView ? "#window" : ""));
             root.addView(web, new FrameLayout.LayoutParams(-1, -1));
         } catch (Exception e) {
             web = null;
@@ -106,6 +133,17 @@ class ApartmentTheme implements LauncherTheme {
         dateParams.topMargin = dp(10);
         dateParams.leftMargin = dp(4);
         clock.addView(date, dateParams);
+        weatherLine = text(medium, 16, FG);
+        weatherLine.setAlpha(0.85f);
+        LinearLayout.LayoutParams weatherParams = new LinearLayout.LayoutParams(-2, -2);
+        weatherParams.topMargin = dp(6);
+        weatherParams.leftMargin = dp(4);
+        clock.addView(weatherLine, weatherParams);
+        showWeather(Weather.cached());
+        // A soft shadow keeps the text readable over bright sky and window frames.
+        for (TextView t : new TextView[] {time, date, weatherLine}) {
+            t.setShadowLayer(dp(6), 0, dp(1), 0x99000000);
+        }
         FrameLayout.LayoutParams clockParams = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
         clockParams.setMargins(dp(32), dp(40), 0, 0);
         root.addView(clock, clockParams);
@@ -205,6 +243,8 @@ class ApartmentTheme implements LauncherTheme {
 
     @Override
     public void onResume() {
+        handler.removeCallbacks(weatherTimer);
+        weatherTimer.run();
         if (web != null) {
             web.onResume();
             web.evaluateJavascript("window.launcherPause && launcherPause(false)", null);
@@ -216,6 +256,7 @@ class ApartmentTheme implements LauncherTheme {
 
     @Override
     public void onPause() {
+        handler.removeCallbacks(weatherTimer);
         // Stop drawing the 3D model while an app is in front.
         if (web != null) {
             web.evaluateJavascript("window.launcherPause && launcherPause(true)", null);
@@ -249,10 +290,35 @@ class ApartmentTheme implements LauncherTheme {
 
     @Override
     public void onDestroy() {
+        handler.removeCallbacks(weatherTimer);
         if (web != null) {
             ((ViewGroup) web.getParent()).removeView(web);
             web.destroy();
             web = null;
+        }
+    }
+
+    // ---- Weather ----
+
+    private void refreshWeather() {
+        Weather.refresh(new Weather.Callback() {
+            @Override
+            public void onWeather(Weather.Now now) {
+                showWeather(now);
+                pushWeather(now);
+            }
+        });
+    }
+
+    private void showWeather(Weather.Now now) {
+        weatherLine.setText(now == null ? "" : now.line());
+        weatherLine.setVisibility(now == null ? View.GONE : View.VISIBLE);
+    }
+
+    // Hands the conditions to the 3D scene (rain, snow, clouds, fog, wind).
+    private void pushWeather(Weather.Now now) {
+        if (web != null && now != null) {
+            web.evaluateJavascript("window.setWeather && setWeather(" + now.json() + ")", null);
         }
     }
 
