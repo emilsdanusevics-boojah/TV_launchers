@@ -50,6 +50,8 @@ A launcher just for listening to Spotify. While music plays, the screen shows no
 - **Down** opens Spotify.
 - **Up** (or **Menu**) opens a menu with **Open Spotify**, **TV settings** and **Change launcher**.
 
+**Automatic switching.** Whichever launcher you've picked, the record appears over it whenever the home screen is showing and Spotify is playing. That includes going Home while music plays, and starting music from your phone with Spotify Connect. When the music stops, or stays paused for 30 seconds, your launcher fades back. Press **Back** on the record to hide it while the music keeps playing; it comes back the next time music starts. Picking your own launcher under **Change launcher** on the record also hides it.
+
 **One-time setup.** Android only shows other apps what's playing if you give them notification access, and Android TV usually hides that setting. Grant it with adb:
 
 ```sh
