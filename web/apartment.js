@@ -815,6 +815,66 @@ function build(H) {
 
 // The light only moves when the sun does (once a minute), so shadows are drawn on demand.
 renderer.shadowMap.autoUpdate = false;
+
+// Lighter versions of some of three.js's shader pieces, for the TV's small GPU. They take
+// effect when the model's materials are first compiled, at the first frame. (If a future
+// three.js changes a piece so it no longer matches, that piece just stays as it was.)
+import { LightProbeGenerator } from "three/examples/jsm/lights/LightProbeGenerator.js";
+function patchChunk(name, find, replacement) {
+  const before = THREE.ShaderChunk[name];
+  THREE.ShaderChunk[name] = before.replace(find, replacement);
+  if (THREE.ShaderChunk[name] === before) console.warn("apartment: shader piece not patched:", name);
+}
+// - The lamps and ceiling lights give diffuse light only (no shiny highlight), and are only
+//   worked out within their reach. All eight used to be fully evaluated at every pixel.
+patchChunk("lights_fragment_begin",
+  /getPointLightInfo\( pointLight, geometryPosition, directLight \);([\s\S]*?)RE_Direct\([^;]*;/,
+  `{   // braces: the loop is unrolled, so each copy needs its own toLight
+      vec3 toLight = pointLight.position - geometryPosition;
+      if ( dot( toLight, toLight ) < pointLight.distance * pointLight.distance ) {
+        getPointLightInfo( pointLight, geometryPosition, directLight );$1
+        reflectedLight.directDiffuse += saturate( dot( geometryNormal, directLight.direction ) ) * directLight.color * BRDF_Lambert( material.diffuseColor );
+      }
+    }`);
+// - Soft shadow edges from 5 samples of the shadow map instead of 17.
+patchChunk("shadowmap_pars_fragment",
+  /shadow = \(\s*texture2DCompare\( shadowMap, shadowCoord\.xy \+ vec2\( dx0, dy0 \)[\s\S]*?\* \( 1\.0 \/ 17\.0 \);/,
+  `shadow = (
+        texture2DCompare( shadowMap, shadowCoord.xy, shadowCoord.z ) * 2.0 +
+        texture2DCompare( shadowMap, shadowCoord.xy + vec2( dx2, dy2 ), shadowCoord.z ) +
+        texture2DCompare( shadowMap, shadowCoord.xy + vec2( dx3, dy2 ), shadowCoord.z ) +
+        texture2DCompare( shadowMap, shadowCoord.xy + vec2( dx2, dy3 ), shadowCoord.z ) +
+        texture2DCompare( shadowMap, shadowCoord.xy + vec2( dx3, dy3 ), shadowCoord.z )
+      ) * ( 1.0 / 6.0 );`);
+// - The soft light every surface gets from the room around it took two lookups into the
+//   blurred environment per pixel. The same light is summed up once here as nine numbers
+//   (spherical harmonics) that the shader just multiplies out. If the TV can't read the
+//   measurement back, the original lookups stay.
+const envSH = (() => {
+  const rt = new THREE.WebGLCubeRenderTarget(32, { type: THREE.HalfFloatType });
+  new THREE.CubeCamera(0.1, 100, rt).update(renderer, new RoomEnvironment());
+  const c = LightProbeGenerator.fromCubeRenderTarget(renderer, rt).sh.coefficients;
+  rt.dispose();
+  const ok = c[0].x + c[0].y + c[0].z > 0.01 && c.every(v => [v.x, v.y, v.z].every(Number.isFinite));
+  return ok ? c : null;
+})();
+if (envSH) {
+  const v = (i) => `vec3(${envSH[i].toArray().map(n => n.toFixed(5)).join(", ")})`;
+  patchChunk("envmap_physical_pars_fragment",
+    /vec4 envMapColor = textureCubeUV\( envMap, worldNormal, 1\.0 \);\s*return PI \* envMapColor\.rgb \* envMapIntensity;/,
+    `float x = worldNormal.x, y = worldNormal.y, z = worldNormal.z;
+      vec3 e = ${v(0)} * 0.886227
+        + ${v(1)} * (1.023328 * y) + ${v(2)} * (1.023328 * z) + ${v(3)} * (1.023328 * x)
+        + ${v(4)} * (0.858086 * x * y) + ${v(5)} * (0.858086 * y * z) + ${v(6)} * (0.743125 * z * z - 0.247708)
+        + ${v(7)} * (0.858086 * x * z) + ${v(8)} * (0.429043 * (x * x - y * y));
+      return max(e, vec3(0.0)) * envMapIntensity;`);
+}
+// - Reflections read one level of the blurred environment instead of blending two. Each
+//   material has a single roughness, so it only picks its blur level a touch differently.
+patchChunk("cube_uv_reflection_fragment",
+  /float mipF = fract\( mip \);[\s\S]*?return vec4\( mix\( color0, color1, mipF \), 1\.0 \);\s*\}/,
+  "return vec4( bilinearCubeUV( envMap, sampleDir, floor( mip + 0.5 ) ), 1.0 );");
+
 build(3.0);
 
 /* ---------- outdoor weather ambiance: Riga, Brīvības iela 95 ----------
@@ -1009,7 +1069,14 @@ function afterAtmosphere() {
   starMat.visible = false;
   clouds.forEach(s => { s.visible = false; });
   if (window.__backdropReady) updateBackdrop();   // the first update runs before it exists
-  renderer.shadowMap.needsUpdate = true;   // the sun has moved
+  // Redraw the shadows once the sun has moved a degree (every few minutes), not every minute.
+  const dir = sun.position.clone().sub(sun.target.position).normalize();
+  const drawn = sun.userData.shadowDir;
+  if (!drawn || sun.castShadow !== sun.userData.shadowCast || dir.dot(drawn) < Math.cos(Math.PI / 180)) {
+    sun.userData.shadowDir = dir;
+    sun.userData.shadowCast = sun.castShadow;
+    renderer.shadowMap.needsUpdate = true;
+  }
 }
 
 /** Called by the app with live conditions: { code, tempC, windKmh, windFrom, summary, observedAt }. */
@@ -1059,7 +1126,42 @@ mergeStatic();
    One full-screen shader drawn behind the flat. Colours come from the original's sky
    (time of day and cloud cover); everything else is generated here: the sun's glow from its
    real direction, clouds drifting with the wind, stars, rain, snow, fog and lightning.
-   Clouds and stars are fixed to the world, so they turn with the view. */
+   Clouds and stars are fixed to the world, so they turn with the view.
+   It's drawn after the flat, at the very back, so the GPU only works out the pixels the
+   flat leaves uncovered. */
+
+// Cloud noise, made once: a tileable 512×512 pattern of five octaves of smooth noise.
+// Reading it costs two texture lookups per pixel, where working the noise out in the shader
+// took about forty hash calculations per pixel, every frame.
+const NOISE_CELLS = 8;   // the pattern repeats every 8 units of cloud coordinates
+const cloudNoise = (() => {
+  const S = 512, sum = new Float32Array(S * S);
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let o = 0, cells = NOISE_CELLS, amp = 0.5; o < 5; o++, cells *= 2, amp *= 0.5) {
+    const lattice = new Float32Array(cells * cells).map(rnd);
+    for (let y = 0; y < S; y++) {
+      const fy = y / S * cells, iy = Math.floor(fy), ty = fy - iy, sy = ty * ty * (3 - 2 * ty);
+      const r0 = iy * cells, r1 = ((iy + 1) % cells) * cells;
+      for (let x = 0; x < S; x++) {
+        const fx = x / S * cells, ix = Math.floor(fx), tx = fx - ix, sx = tx * tx * (3 - 2 * tx), ix1 = (ix + 1) % cells;
+        const top = lattice[r0 + ix] + (lattice[r0 + ix1] - lattice[r0 + ix]) * sx;
+        const bottom = lattice[r1 + ix] + (lattice[r1 + ix1] - lattice[r1 + ix]) * sx;
+        sum[y * S + x] += amp * (top + (bottom - top) * sy);
+      }
+    }
+  }
+  const data = new Uint8Array(S * S * 4);
+  for (let i = 0; i < S * S; i++) data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = Math.round(sum[i] * 255);
+  const t = new THREE.DataTexture(data, S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.needsUpdate = true;
+  return t;
+})();
+
 const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
   uniforms: {
     uTop: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() },
@@ -1067,24 +1169,18 @@ const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderM
     uSun: { value: new THREE.Vector2(0.5, 1.2) }, uWind: { value: new THREE.Vector2() },
     uSunVis: { value: 0 }, uDusk: { value: 0 }, uDay: { value: 1 }, uCloud: { value: 0.5 },
     uRain: { value: 0 }, uSnow: { value: 0 }, uFog: { value: 0 }, uFlash: { value: 0 },
-    uTime: { value: 0 }, uAngle: { value: 0 }, uAspect: { value: 16 / 9 },
+    uTime: { value: 0 }, uAngle: { value: 0 }, uAspect: { value: 16 / 9 }, uStars: { value: 0 },
+    uNoise: { value: cloudNoise },
   },
-  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+  // At the far end of the depth range: pixels already covered by the flat are skipped.
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.99999, 1.0); }",
   fragmentShader: `
     uniform vec3 uTop, uHorizon, uSunColor, uHaze;
     uniform vec2 uSun, uWind;
-    uniform float uSunVis, uDusk, uDay, uCloud, uRain, uSnow, uFog, uFlash, uTime, uAngle, uAspect;
+    uniform float uSunVis, uDusk, uDay, uCloud, uRain, uSnow, uFog, uFlash, uTime, uAngle, uAspect, uStars;
+    uniform sampler2D uNoise;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-    float noise(vec2 p) {
-      vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-      return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
-    }
-    float fbm(vec2 p) {
-      float v = 0.0, a = 0.5;
-      for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; }
-      return v;
-    }
     void main() {
       vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0);
       // Sky: zenith colour at the top of the screen, the horizon's towards the bottom.
@@ -1097,12 +1193,14 @@ const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderM
       float c = cos(uAngle), s = sin(uAngle);
       vec2 w = mat2(c, -s, s, c) * p;
       // Stars on clear nights.
-      vec2 g = w * 85.0; vec2 cell = floor(g); float h = hash(cell);
-      float star = step(0.986, h) * smoothstep(0.32, 0.0, length(fract(g) - 0.5)) * (0.65 + 0.35 * sin(uTime * 1.7 + h * 40.0));
-      col += vec3(star) * (1.0 - uDay) * (1.0 - uCloud) * 0.9;
+      if (uStars > 0.01) {
+        vec2 g = w * 85.0; vec2 cell = floor(g); float h = hash(cell);
+        float star = step(0.986, h) * smoothstep(0.32, 0.0, length(fract(g) - 0.5)) * (0.65 + 0.35 * sin(uTime * 1.7 + h * 40.0));
+        col += vec3(star) * uStars;
+      }
       // Clouds, as much as the real cover, drifting with the wind.
-      vec2 q = w * 2.0 - uWind * uTime * 0.01;
-      float n = fbm(q) * 0.65 + fbm(q * 2.6 + 3.1) * 0.35;
+      vec2 q = (w * 2.0 - uWind * uTime * 0.01) / ${NOISE_CELLS.toFixed(1)};
+      float n = texture2D(uNoise, q).r * 0.65 + texture2D(uNoise, q * 2.6 + 3.1 / ${NOISE_CELLS.toFixed(1)}).r * 0.35;
       float edge = 1.0 - uCloud * 0.8;
       float cover = smoothstep(edge - 0.14, edge + 0.26, n);
       vec3 cloudCol = mix(vec3(0.14, 0.16, 0.21), mix(vec3(0.96), vec3(0.58, 0.6, 0.64), uCloud), uDay);
@@ -1136,10 +1234,10 @@ const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderM
       gl_FragColor = vec4(col, 1.0);
       #include <colorspace_fragment>
     }`,
-  depthTest: false, depthWrite: false,
+  depthWrite: false,
 }));
 backdrop.frustumCulled = false;
-backdrop.renderOrder = -1000;
+backdrop.renderOrder = 1000;   // last of the solid things; glass and rain still go over it
 scene.add(backdrop);
 const BU = backdrop.material.uniforms;
 window.__backdropReady = true;
@@ -1158,6 +1256,7 @@ function updateBackdrop() {
   BU.uSunColor.value.setRGB(1, 0.86, 0.62).lerp(new THREE.Color(1, 0.55, 0.32), BU.uDusk.value);
   BU.uDay.value = day;
   BU.uCloud.value = fx.cloud;
+  BU.uStars.value = (1 - day) * (1 - fx.cloud) * 0.9;
   BU.uRain.value = fx.rain;
   BU.uSnow.value = fx.snow;
   BU.uFog.value = fx.fog;
@@ -1187,7 +1286,7 @@ camera.updateProjectionMatrix();
 
 // The angle comes from the clock, not a frame count, so the turn speed is always the same.
 let paused = false, angle = 0.6, last = 0, time = 0;
-window.launcherPause = (p) => { paused = p; last = 0; slow = fast = 0; };
+window.launcherPause = (p) => { paused = p; last = 0; slow = fast = 0; widthLimit = MAX_WIDTH; };
 // For previews and checks.
 window.launcherStats = () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, renderWidth, weather });
 // For previews: pretend it's this time (an ISO date string) when placing the sun.
@@ -1218,14 +1317,18 @@ addEventListener("resize", frame);
    GPU can't keep up), lower the render resolution a step; if there's plenty of headroom
    for a while, raise it again. A few late frames in a row are what reads as judder. */
 let slow = 0, fast = 0;
+// A width that proved too much isn't tried again until the launcher is next opened, so the
+// resolution doesn't keep stepping up and down (each step is itself a hitch).
+let widthLimit = MAX_WIDTH;
 function adapt(frameMs) {
   if (frameMs > 22) { slow++; fast = 0; } else if (frameMs < 17.5) { fast++; slow = Math.max(0, slow - 1); }
   if (slow >= 20 && renderWidth > MIN_WIDTH) {
+    widthLimit = renderWidth - 1;
     renderWidth = Math.max(MIN_WIDTH, Math.round(renderWidth * 0.85));
     slow = fast = 0;
     frame();
-  } else if (fast >= 600 && renderWidth < MAX_WIDTH) {   // ten calm seconds
-    renderWidth = Math.min(MAX_WIDTH, Math.round(renderWidth * 1.1));
+  } else if (fast >= 600 && renderWidth < widthLimit) {   // ten calm seconds
+    renderWidth = Math.min(widthLimit, Math.round(renderWidth * 1.1));
     slow = fast = 0;
     frame();
   }

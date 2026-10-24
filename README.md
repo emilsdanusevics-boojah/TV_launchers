@@ -21,7 +21,7 @@ On top of it:
 - your apps as a row of names along the bottom
 - a settings button (gear) at the bottom right
 
-The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`. The weather, sky and camera code in `web/apartment.js` are kept. The scene runs in a WebView from files inside the app, and it pauses while another app is open. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
+The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`. The weather, sky and camera code in `web/apartment.js` are kept. The scene runs in a WebView from files inside the app, and it pauses while another app is open. To keep the motion smooth on a TV's small graphics chip, it uses lighter versions of some of three.js's lighting and shadow shaders, draws the sky only where the flat doesn't cover it, and lowers the render resolution if frames start arriving late. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
 
 - **Left/Right** moves along the apps. **OK** opens one; **long-press OK** opens its info page.
 - **Gear** (or **Menu** on the remote) opens a menu:
