@@ -122,6 +122,12 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
         handler.removeCallbacks(rotateBackground);
     }
 
+    /** Images were added or removed from the phone: show the current one again. */
+    void refreshBackground() {
+        backgroundKey = null;
+        updateBackground(true);
+    }
+
     @Override
     public void onHome() {
         scumm.reset();
@@ -203,12 +209,16 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
 
     // Settings asks what you want, like a conversation in the game.
     private void showSettingsChoices() {
-        scumm.showChoices(Arrays.asList("Open the TV settings.", "I'd like a different launcher."),
+        String url = Remote.url();
+        scumm.showChoices(url == null ? "" : "Phone: " + url.replace("http://", ""),
+                Arrays.asList("Open the TV settings.", "I'd like to change my apps.", "I'd like a different launcher."),
                 new ScummView.ChoiceListener() {
                     @Override
                     public void onChoice(int index) {
                         if (index == 0) {
                             settings();
+                        } else if (index == 1) {
+                            activity.editApps();
                         } else {
                             showLauncherChoices();
                         }
@@ -223,7 +233,7 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
             String name = MainActivity.LAUNCHER_NAMES[i];
             lines.add(ids[i].equals(activity.currentLauncher()) ? name + " - this one." : name + ".");
         }
-        scumm.showChoices(lines, new ScummView.ChoiceListener() {
+        scumm.showChoices("", lines, new ScummView.ChoiceListener() {
             @Override
             public void onChoice(int index) {
                 activity.switchLauncher(ids[index]);

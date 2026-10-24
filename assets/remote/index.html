@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TV Launcher</title>
+<style>
+  :root {
+    --bg: #f4f3f0; --card: #ffffff; --fg: #1d1e20; --muted: #6d6a64; --line: rgba(29, 30, 32, 0.12);
+    --accent: #a87a3d; --accent-ink: #fffaf2; --chip: rgba(29, 30, 32, 0.06); --danger: #b3412e;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416; --card: #1e1f21; --fg: #ecebe8; --muted: #a29f99; --line: rgba(236, 235, 232, 0.12);
+      --accent: #d4a464; --accent-ink: #1d1a15; --chip: rgba(236, 235, 232, 0.08); --danger: #e0806c;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+  }
+  main { max-width: 560px; margin: 0 auto; display: grid; gap: 16px; }
+  header h1 { margin: 8px 0 2px; font-size: 26px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  h2 { margin: 0 0 12px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+  button {
+    font: inherit; color: var(--fg); background: var(--chip); border: 1px solid transparent;
+    border-radius: 10px; padding: 10px 12px; cursor: pointer; min-height: 44px;
+  }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button:disabled { opacity: 0.35; cursor: default; }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .app { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; align-items: center; }
+  .app input {
+    font: inherit; color: var(--fg); background: var(--chip); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; min-width: 0; width: 100%; min-height: 44px;
+  }
+  .app small { display: block; color: var(--muted); font-size: 12px; padding: 2px 4px 0; overflow-wrap: anywhere; }
+  .icon { width: 44px; padding: 0; font-size: 18px; }
+  .remove { color: var(--danger); }
+  .add { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 12px; }
+  select {
+    font: inherit; color: var(--fg); background: var(--chip); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; min-height: 44px; min-width: 0; width: 100%;
+  }
+  .empty { color: var(--muted); font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  figure { margin: 0; position: relative; border-radius: 10px; overflow: hidden; background: var(--chip); }
+  figure img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; image-rendering: pixelated; }
+  figcaption { font-size: 12px; color: var(--muted); padding: 6px 8px; overflow-wrap: anywhere; }
+  figure button { position: absolute; top: 6px; right: 6px; min-height: 32px; padding: 4px 10px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 13px; }
+  .upload { display: block; margin-top: 12px; }
+  .upload input { display: none; }
+  .upload span { display: block; text-align: center; background: var(--accent); color: var(--accent-ink); font-weight: 600; border-radius: 10px; padding: 12px; cursor: pointer; }
+  .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  #toast {
+    position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 14px;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none; max-width: calc(100% - 32px);
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>TV Launcher</h1>
+    <p>Changes appear on the TV straight away.</p>
+  </header>
+
+  <section>
+    <h2>Launcher</h2>
+    <div class="seg" id="launchers"></div>
+  </section>
+
+  <section>
+    <h2>Apps</h2>
+    <ul id="apps"></ul>
+    <div class="add">
+      <select id="addSelect" aria-label="App to add"></select>
+      <button type="button" id="addButton">Add</button>
+    </div>
+    <p class="hint">The name is what the launchers show. Monkey Island's font has letters, digits and + - ! : . ' only.</p>
+  </section>
+
+  <section>
+    <h2>Monkey Island backgrounds</h2>
+    <div class="grid" id="backgrounds"></div>
+    <label class="upload"><input type="file" id="files" accept="image/*" multiple><span>Upload images</span></label>
+    <p class="hint">Shown in name order, changing every 5 minutes. Pixel art stays sharp; scenes of about 320×144 fit best.</p>
+  </section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+let state = null;
+
+const $ = (id) => document.getElementById(id);
+function toast(text) {
+  const t = $("toast");
+  t.textContent = text;
+  t.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+async function api(method, path, body, type) {
+  const res = await fetch(path, {
+    method,
+    headers: body === undefined ? {} : { "Content-Type": type || "application/json" },
+    body: body === undefined ? undefined : (type ? body : JSON.stringify(body)),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+function render() {
+  // Launcher
+  const seg = $("launchers");
+  seg.innerHTML = "";
+  for (const l of state.launchers) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = l.name;
+    b.className = l.id === state.launcher ? "on" : "";
+    b.setAttribute("aria-pressed", String(l.id === state.launcher));
+    b.onclick = async () => {
+      state = await api("POST", "/api/launcher", { id: l.id });
+      render();
+      toast(l.name + " is on the TV");
+    };
+    seg.appendChild(b);
+  }
+
+  // Apps
+  const labels = Object.fromEntries(state.installed.map((a) => [a.pkg, a.label]));
+  const list = $("apps");
+  list.innerHTML = "";
+  if (!state.apps.length) {
+    list.innerHTML = '<li class="empty">No apps yet. Add some below.</li>';
+  }
+  state.apps.forEach((app, i) => {
+    const li = document.createElement("li");
+    li.className = "app";
+    const field = document.createElement("div");
+    const input = document.createElement("input");
+    input.value = app.name;
+    input.setAttribute("aria-label", "Name for " + (labels[app.pkg] || app.pkg));
+    input.onchange = () => { app.name = input.value.trim() || labels[app.pkg] || app.pkg; saveApps("Renamed"); };
+    const small = document.createElement("small");
+    // Under the name, the app's own name when it differs, or a note if it's gone.
+    small.textContent = !labels[app.pkg] ? app.pkg + " (not installed)" : labels[app.pkg] !== app.name ? labels[app.pkg] : "";
+    field.append(input);
+    if (small.textContent) field.append(small);
+    const up = button("↑", "Move up", i === 0, () => move(i, -1));
+    const down = button("↓", "Move down", i === state.apps.length - 1, () => move(i, 1));
+    const remove = button("✕", "Remove", false, () => { state.apps.splice(i, 1); saveApps("Removed"); });
+    remove.classList.add("remove");
+    li.append(field, up, down, remove);
+    list.appendChild(li);
+  });
+  const shown = new Set(state.apps.map((a) => a.pkg));
+  const select = $("addSelect");
+  select.innerHTML = "";
+  for (const a of state.installed) {
+    if (!shown.has(a.pkg)) {
+      const o = document.createElement("option");
+      o.value = a.pkg;
+      o.textContent = a.label;
+      select.appendChild(o);
+    }
+  }
+  $("addButton").disabled = select.options.length === 0;
+
+  // Backgrounds
+  const grid = $("backgrounds");
+  grid.innerHTML = "";
+  if (!state.backgrounds.length) {
+    grid.innerHTML = '<p class="empty">None yet. The launcher shows its built-in scene.</p>';
+  }
+  for (const bg of state.backgrounds) {
+    const fig = document.createElement("figure");
+    const img = document.createElement("img");
+    img.src = "/api/background?name=" + encodeURIComponent(bg.name);
+    img.alt = bg.name;
+    img.loading = "lazy";
+    const cap = document.createElement("figcaption");
+    cap.textContent = bg.name;
+    const del = document.createElement("button");
+    del.type = "button";
+    del.textContent = "Delete";
+    del.onclick = async () => {
+      if (!confirm("Delete " + bg.name + "?")) return;
+      state = await api("DELETE", "/api/background?name=" + encodeURIComponent(bg.name));
+      render();
+      toast("Deleted");
+    };
+    fig.append(img, del, cap);
+    grid.appendChild(fig);
+  }
+}
+
+function button(text, label, disabled, onclick) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "icon";
+  b.textContent = text;
+  b.setAttribute("aria-label", label);
+  b.disabled = disabled;
+  b.onclick = onclick;
+  return b;
+}
+
+function move(i, delta) {
+  const [app] = state.apps.splice(i, 1);
+  state.apps.splice(i + delta, 0, app);
+  saveApps("Moved");
+}
+
+async function saveApps(message) {
+  try {
+    state = await api("POST", "/api/apps", state.apps);
+    render();
+    toast(message);
+  } catch (e) {
+    toast("Couldn't save: " + e.message);
+  }
+}
+
+$("addButton").onclick = () => {
+  const pkg = $("addSelect").value;
+  const app = state.installed.find((a) => a.pkg === pkg);
+  if (app) {
+    state.apps.push({ pkg: app.pkg, name: app.label });
+    saveApps("Added " + app.label);
+  }
+};
+
+$("files").onchange = async (e) => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    toast("Uploading " + (i + 1) + " of " + files.length + "…");
+    try {
+      state = await api("POST", "/api/background?name=" + encodeURIComponent(f.name), f, f.type || "application/octet-stream");
+    } catch (err) {
+      toast("Couldn't upload " + f.name);
+      return;
+    }
+  }
+  render();
+  toast(files.length === 1 ? "Uploaded" : "Uploaded " + files.length + " images");
+};
+
+(async () => {
+  try {
+    state = await api("GET", "/api/state");
+    render();
+  } catch (e) {
+    document.querySelector("main").insertAdjacentHTML("beforeend",
+      '<section><p class="empty">Can\'t reach the TV. Is the launcher running?</p></section>');
+  }
+})();
+</script>
+</body>
+</html>

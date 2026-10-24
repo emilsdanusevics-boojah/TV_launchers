@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.minimal.tvlauncher"
-    android:versionCode="16"
-    android:versionName="5.1">
+    android:versionCode="17"
+    android:versionName="5.2">
 
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="28" />
 
@@ -38,6 +38,13 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".EditAppsActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/LauncherTheme" />
 
         <!-- Vinyl launcher: lets the launcher see what Spotify is playing once the user
              grants notification access (see MediaListener). -->

@@ -128,6 +128,7 @@ public class ScummView extends View {
     private long messageUntil;
 
     private List<String> choices;
+    private String choicePrompt = "";
     private ChoiceListener choiceListener;
     private int choiceFocus;
 
@@ -200,8 +201,12 @@ public class ScummView extends View {
     }
 
     /** Back to the first app with the default verb, as after pressing Home. */
-    /** Replaces the verbs and inventory with lines to choose from, until one is picked or Back. */
-    void showChoices(List<String> lines, ChoiceListener listener) {
+    /**
+     * Replaces the verbs and inventory with lines to choose from, until one is picked or Back.
+     * {@code prompt} is shown in the sentence line meanwhile.
+     */
+    void showChoices(String prompt, List<String> lines, ChoiceListener listener) {
+        choicePrompt = prompt;
         choices = new ArrayList<String>(lines);
         choiceListener = listener;
         choiceFocus = 0;
@@ -534,7 +539,7 @@ public class ScummView extends View {
             return message;
         }
         if (choices != null) {
-            return "";
+            return choicePrompt;
         }
         if (onVerbs) {
             if (verbFocus >= verbs.size()) {

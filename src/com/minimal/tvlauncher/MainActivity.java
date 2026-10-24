@@ -22,8 +22,11 @@ import java.util.List;
  * Whatever the chosen launcher, while Spotify is playing the Vinyl launcher's record is
  * shown over it, and it goes away again once the music stops. Back hides the record until
  * the music next starts.
+ *
+ * It also runs the phone page (see RemoteServer) and picks up changes made there or in
+ * EditAppsActivity.
  */
-public class MainActivity extends Activity implements NowPlaying.Listener {
+public class MainActivity extends Activity implements NowPlaying.Listener, Remote.Listener {
 
     static final String[] LAUNCHER_IDS = {"apartment", "monkey_island", "vinyl"};
     static final String[] LAUNCHER_NAMES = {"Apartment", "Monkey Island", "Vinyl"};
@@ -104,6 +107,9 @@ public class MainActivity extends Activity implements NowPlaying.Listener {
         filter.addAction(Intent.ACTION_PACKAGE_REPLACED);
         filter.addDataScheme("package");
         registerReceiver(packageReceiver, filter);
+
+        Remote.start(this);
+        Remote.setListener(this);
     }
 
     String currentLauncher() {
@@ -121,6 +127,35 @@ public class MainActivity extends Activity implements NowPlaying.Listener {
         }
         settings.edit().putString("launcher", id).apply();
         recreate();
+    }
+
+    /** Opens the TV's app editor; the home screen updates when it saves. */
+    void editApps() {
+        startActivity(new Intent(this, EditAppsActivity.class));
+    }
+
+    // ---- Changes from the phone page or the app editor ----
+
+    @Override
+    public void onAppsChanged() {
+        apps = Apps.load(this);
+        base.setApps(apps);
+        if (vinylView != null) {
+            vinyl.setApps(apps);
+        }
+    }
+
+    @Override
+    public void onLauncherChanged(String id) {
+        switchLauncher(id);
+    }
+
+    @Override
+    public void onBackgroundsChanged() {
+        // When hidden, the slideshow re-reads the folder as it comes back on screen anyway.
+        if (resumed && !showingVinyl && base instanceof MonkeyIslandTheme) {
+            ((MonkeyIslandTheme) base).refreshBackground();
+        }
     }
 
     private LauncherTheme active() {
@@ -233,6 +268,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener {
 
     @Override
     protected void onDestroy() {
+        Remote.clearListener(this);
         unregisterReceiver(packageReceiver);
         base.onDestroy();
         if (vinylView != null) {

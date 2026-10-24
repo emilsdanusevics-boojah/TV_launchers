@@ -52,6 +52,7 @@ class ApartmentTheme implements LauncherTheme {
     private LinearLayout menu;
     private TextView menuTitle;
     private LinearLayout menuItems;
+    private TextView menuFooter;
 
     ApartmentTheme(MainActivity activity) {
         this.activity = activity;
@@ -151,6 +152,9 @@ class ApartmentTheme implements LauncherTheme {
         menuItems = new LinearLayout(activity);
         menuItems.setOrientation(LinearLayout.VERTICAL);
         menu.addView(menuItems);
+        menuFooter = text(medium, 12, MUTED);
+        menuFooter.setPadding(dp(14), dp(10), dp(14), dp(4));
+        menu.addView(menuFooter);
         menu.setVisibility(View.GONE);
         FrameLayout.LayoutParams menuParams = new FrameLayout.LayoutParams(dp(280), -2, Gravity.BOTTOM | Gravity.END);
         menuParams.setMargins(0, 0, dp(44), dp(100));
@@ -263,12 +267,24 @@ class ApartmentTheme implements LauncherTheme {
                 Apps.openSettings(activity);
             }
         });
+        addMenuItem("Edit apps", new Runnable() {
+            @Override
+            public void run() {
+                closeMenu();
+                activity.editApps();
+            }
+        });
         addMenuItem("Change launcher", new Runnable() {
             @Override
             public void run() {
                 showLauncherMenu();
             }
         });
+        String url = Remote.url();
+        if (url != null) {
+            menuFooter.setText("Phone: " + url.replace("http://", ""));
+            menuFooter.setVisibility(View.VISIBLE);
+        }
         menuItems.getChildAt(0).requestFocus();
     }
 
@@ -302,6 +318,7 @@ class ApartmentTheme implements LauncherTheme {
     private void openMenu(String title) {
         menuTitle.setText(title);
         menuItems.removeAllViews();
+        menuFooter.setVisibility(View.GONE);
         menu.setVisibility(View.VISIBLE);
         // Keep the remote inside the menu while it is open.
         bar.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);

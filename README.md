@@ -1,6 +1,6 @@
 # Minimal TV Launcher
 
-A home screen for Android TV / Xiaomi TV with three looks. You can switch between them from the settings button in either one; the choice is remembered.
+A home screen for Android TV / Xiaomi TV with three looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
 
 ## Apartment (default)
 
@@ -62,11 +62,29 @@ Until you do, the launcher shows this command on screen.
 
 ## Choosing which apps are shown
 
-Edit `res/values/apps.xml` and rebuild. Each line is `Name|package,package`. The name is what appears in the inventory, so keep it to letters, digits and `+ - ! : . '`, the characters the verb font has. An app is shown if its package is listed or its installed name matches (case, spaces and symbols are ignored). Both launchers show them in the order listed. In Monkey Island there are 6 per inventory page, and the arrows scroll if there are more. To list the packages installed on the TV, run `adb shell pm list packages`.
+**On the TV:** open the settings menu in any launcher and choose **Edit apps**. In Monkey Island, choose *"I'd like to change my apps."* The screen lists the apps on the home screen first, in order, then every other installed app.
+
+- **OK** shows or hides an app.
+- **Right** on a shown app picks it up. **Up/Down** then moves it, and **OK** puts it down.
+- Changes are saved straight away. **Back** returns to the home screen.
+
+**From your phone:** see below. The phone page can also rename apps.
+
+All three launchers use the same list. In Monkey Island there are 6 apps per inventory page, and the arrows scroll if there are more. The list starts from `res/values/apps.xml` (`Name|package,package`) until you first edit it.
+
+## Phone page
+
+While the launcher is running, it serves a small page on your home Wi-Fi at **http://&lt;TV's IP address&gt;:8765**. Every settings menu shows the address. On the page you can:
+
+- switch launcher
+- show, hide, reorder and rename apps
+- upload and delete Monkey Island background images
+
+Changes appear on the TV straight away. The page is only reachable on your local network, and there's no password: anyone on your Wi-Fi who knows the address can use it.
 
 ## Monkey Island backgrounds
 
-Put your images in a folder called `backgrounds` and push it to the TV. The launcher shows them in name order and crossfades to the next one every 5 minutes:
+Upload images from the phone page, or put them in a folder called `backgrounds` and push it to the TV with adb. The launcher shows them in name order and crossfades to the next one every 5 minutes:
 
 ```sh
 adb push backgrounds /sdcard/Android/data/com.minimal.tvlauncher/files/

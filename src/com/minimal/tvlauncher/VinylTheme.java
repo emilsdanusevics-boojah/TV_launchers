@@ -51,6 +51,7 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
     private LinearLayout menu;
     private TextView menuTitle;
     private LinearLayout menuItems;
+    private TextView menuFooter;
     private Apps.Entry spotify;
 
     VinylTheme(MainActivity activity) {
@@ -138,6 +139,9 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
         menuItems = new LinearLayout(activity);
         menuItems.setOrientation(LinearLayout.VERTICAL);
         menu.addView(menuItems);
+        menuFooter = text(medium, 12, MUTED);
+        menuFooter.setPadding(dp(14), dp(10), dp(14), dp(4));
+        menu.addView(menuFooter);
         menu.setVisibility(View.GONE);
         FrameLayout.LayoutParams menuParams = new FrameLayout.LayoutParams(dp(280), -2, Gravity.BOTTOM | Gravity.END);
         menuParams.setMargins(0, 0, dp(44), dp(44));
@@ -302,12 +306,24 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
                 Apps.openSettings(activity);
             }
         });
+        addMenuItem("Edit apps", new Runnable() {
+            @Override
+            public void run() {
+                closeMenu();
+                activity.editApps();
+            }
+        });
         addMenuItem("Change launcher", new Runnable() {
             @Override
             public void run() {
                 showLauncherMenu();
             }
         });
+        String url = Remote.url();
+        if (url != null) {
+            menuFooter.setText("Phone: " + url.replace("http://", ""));
+            menuFooter.setVisibility(View.VISIBLE);
+        }
         menuItems.getChildAt(0).requestFocus();
     }
 
@@ -341,6 +357,7 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
     private void openMenu(String title) {
         menuTitle.setText(title);
         menuItems.removeAllViews();
+        menuFooter.setVisibility(View.GONE);
         menu.setVisibility(View.VISIBLE);
         // Keep the remote inside the menu while it is open.
         idle.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
