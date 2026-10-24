@@ -237,6 +237,7 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
     @Override
     public void onStateChanged(int state) {
         vinyl.setPlaying(state == NowPlaying.PLAYING);
+        vinyl.setLoaded(state == NowPlaying.PLAYING || state == NowPlaying.PAUSED);
         if (state == NowPlaying.PLAYING || state == NowPlaying.PAUSED) {
             // Only the record: hide everything else.
             idle.setVisibility(View.GONE);
@@ -248,6 +249,11 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
             vinyl.setCover(null);
             vinyl.setColors(IDLE_COLORS);
         }
+    }
+
+    @Override
+    public void onTimingChanged(long positionMs, long updatedAt, float speed, long durationMs) {
+        vinyl.setTiming(positionMs, updatedAt, speed, durationMs);
     }
 
     @Override

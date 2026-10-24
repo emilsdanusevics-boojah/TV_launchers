@@ -30,6 +30,12 @@ class NowPlaying {
 
         /** A new track's cover (null if it has none) and its colours (null with no cover). */
         void onArtChanged(Bitmap art, int[] colors);
+
+        /**
+         * Where playback is: position (ms) as of {@code updatedAt} (SystemClock.elapsedRealtime),
+         * moving at {@code speed}, in a track {@code durationMs} long (0 if unknown).
+         */
+        void onTimingChanged(long positionMs, long updatedAt, float speed, long durationMs);
     }
 
     private final Context context;
@@ -161,6 +167,12 @@ class NowPlaying {
             setState(PLAYING);
         } else {
             setState(PAUSED);
+        }
+
+        if (playback != null) {
+            long duration = metadata == null ? 0 : metadata.getLong(MediaMetadata.METADATA_KEY_DURATION);
+            listener.onTimingChanged(playback.getPosition(), playback.getLastPositionUpdateTime(),
+                    playback.getPlaybackSpeed(), duration);
         }
 
         String key = metadata == null ? null

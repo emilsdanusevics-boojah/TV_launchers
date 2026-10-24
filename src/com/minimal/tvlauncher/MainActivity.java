@@ -184,6 +184,10 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         // The Vinyl launcher follows the music itself.
     }
 
+    @Override
+    public void onTimingChanged(long positionMs, long updatedAt, float speed, long durationMs) {
+    }
+
     private void showVinyl(boolean show) {
         if (vinyl == null || show == showingVinyl) {
             return;

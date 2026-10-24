@@ -2,3 +2,4 @@ build/
 web/node_modules/
 *.idsig
 release.keystore
+__pycache__/

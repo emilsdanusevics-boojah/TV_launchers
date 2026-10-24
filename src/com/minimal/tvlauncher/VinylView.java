@@ -12,7 +12,9 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RadialGradient;
 import android.graphics.Shader;
+import android.graphics.RectF;
 import android.graphics.SweepGradient;
+import android.os.SystemClock;
 import android.view.View;
 
 import java.util.Random;
@@ -21,6 +23,11 @@ import java.util.Random;
  * A record turning at 33⅓ rpm with the album cover as its label, over a slowly turning
  * gradient in the cover's colours. The disc, its shadow and the light's sheen are drawn
  * once per track into bitmaps; each frame only rotates the disc, so it stays smooth.
+ *
+ * A tonearm behaves like a real one: when music starts it swings over from its rest and
+ * lowers onto the record; pause lifts it in place (like a cue lever); when the music
+ * stops it goes back to its rest. While playing, the needle moves from the edge towards
+ * the label as the song goes on.
  */
 class VinylView extends View {
 
@@ -52,6 +59,24 @@ class VinylView extends View {
     private float angle;
     private float gradientAngle;
     private long lastFrame;
+
+    // Tonearm. Geometry is in units of the record's radius, from the record's centre.
+    private static final float PIVOT_X = 1.12f, PIVOT_Y = -0.80f, ARM_LENGTH = 1.25f;
+    private static final float REST_ANGLE = (float) Math.toRadians(76);
+    private static final float NEEDLE_START = 0.93f;   // lead-in groove, as a share of the radius
+    private boolean loaded;      // a track is playing or paused
+    private float swing;         // 0 = on its rest, 1 = over the record
+    private float lift = 0f;     // 0 = down, 1 = raised
+    private float trackAngle;    // where the needle is on the record
+    private float startAngle;    // needle on the lead-in groove
+    private float endAngle;      // needle near the label
+    private long positionMs, positionAt, durationMs;
+    private float playbackSpeed;
+    private final Paint armPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint armShadow = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF rect = new RectF();
+    private Shader tubeShader, weightShader, baseShader, gimbalShader;
+    private float armBuiltFor;   // record radius the arm's shading was made for
 
     VinylView(Context context) {
         super(context);
@@ -88,6 +113,20 @@ class VinylView extends View {
     void setPlaying(boolean value) {
         playing = value;
         invalidate();
+    }
+
+    /** Whether a track is loaded (playing or paused). With nothing loaded the arm rests. */
+    void setLoaded(boolean value) {
+        loaded = value;
+        invalidate();
+    }
+
+    /** Playback position, for moving the needle across the record as the song plays. */
+    void setTiming(long position, long updatedAt, float speed, long duration) {
+        positionMs = position;
+        positionAt = updatedAt;
+        playbackSpeed = speed;
+        durationMs = duration;
     }
 
     /** Animate only while the launcher is on screen. */
@@ -128,6 +167,7 @@ class VinylView extends View {
         canvas.drawBitmap(disc, cx - d / 2f, cy - d / 2f, paint);
         canvas.restore();
         canvas.drawBitmap(sheen, cx - d / 2f, cy - d / 2f, paint);
+        drawArm(canvas, cx, cy, d / 2f);
 
         if (running) {
             postInvalidateOnAnimation();
@@ -141,6 +181,7 @@ class VinylView extends View {
             speed = 0f;
         }
         angle = (angle + speed * dt) % 360f;
+        stepArm(dt);
         gradientAngle = (gradientAngle + dt * 360f / GRADIENT_TURN_SECONDS) % 360f;
         if (colorFade < 1f) {
             colorFade = Math.min(1f, colorFade + dt / COLOR_FADE_SECONDS);
@@ -253,6 +294,175 @@ class VinylView extends View {
                 new int[] {0, 0, glint, 0, 0, 0, glint, 0, 0},
                 new float[] {0f, 0.06f, 0.12f, 0.2f, 0.5f, 0.56f, 0.62f, 0.7f, 1f}));
         sc.drawCircle(r, r, r, shine);
+    }
+
+    // Moves the arm one frame towards where it should be. It only swings while raised, and
+    // only lowers once it is over the record (or back on its rest).
+    private void stepArm(float dt) {
+        float targetSwing = loaded ? 1f : 0f;
+        boolean swinging = Math.abs(swing - targetSwing) > 0.002f;
+        float targetLift;
+        if (swinging) {
+            targetLift = 1f;                       // raise before moving
+        } else if (loaded) {
+            targetLift = playing ? 0f : 1f;        // play lowers, pause lifts (cue lever)
+        } else {
+            targetLift = 0f;                       // settle onto the rest
+        }
+        float liftTime = targetLift < lift ? 0.32f : 0.12f;   // lowering is slow and damped
+        lift = approach(lift, targetLift, dt, liftTime);
+        if (swinging && lift > 0.97f) {
+            swing = approach(swing, targetSwing, dt, 0.38f);
+        }
+
+        // Needle position from how far through the song we are.
+        float progress = 0.15f;
+        if (durationMs > 0) {
+            long pos = positionMs;
+            if (playing && positionAt > 0) {
+                pos += (long) ((SystemClock.elapsedRealtime() - positionAt) * playbackSpeed);
+            }
+            progress = Math.max(0f, Math.min(1f, pos / (float) durationMs));
+        }
+        float target = startAngle + (endAngle - startAngle) * progress;
+        trackAngle = trackAngle == 0f ? target : approach(trackAngle, target, dt, 0.45f);
+    }
+
+    private static float approach(float value, float target, float dt, float seconds) {
+        float next = value + (target - value) * (1f - (float) Math.exp(-dt / seconds));
+        return Math.abs(target - next) < 0.001f ? target : next;
+    }
+
+    // The arm angle (radians, screen coordinates) at which the needle is this far from the
+    // record's centre. The needle's distance shrinks steadily from 90° to 150°.
+    private static float angleForRadius(float rho) {
+        float lo = (float) Math.toRadians(90), hi = (float) Math.toRadians(150);
+        for (int i = 0; i < 40; i++) {
+            float mid = (lo + hi) / 2f;
+            double x = PIVOT_X + ARM_LENGTH * Math.cos(mid), y = PIVOT_Y + ARM_LENGTH * Math.sin(mid);
+            if (Math.hypot(x, y) > rho) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        return (lo + hi) / 2f;
+    }
+
+    private void buildArm(float r) {
+        startAngle = angleForRadius(NEEDLE_START);
+        endAngle = angleForRadius(LABEL_RATIO * 1.12f);
+        float tube = 0.018f * r;
+        tubeShader = new LinearGradient(0, -tube, 0, tube,
+                new int[] {0xFFF4F4F6, 0xFFB9B9C0, 0xFF6E6E76}, new float[] {0f, 0.45f, 1f}, Shader.TileMode.CLAMP);
+        float w = 0.065f * r;
+        weightShader = new LinearGradient(0, -w, 0, w,
+                new int[] {0xFF5A5A60, 0xFF2A2A2E, 0xFF121214}, new float[] {0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
+        baseShader = new RadialGradient(-0.03f * r, -0.03f * r, 0.15f * r,
+                new int[] {0xFF3A3A40, 0xFF1C1C20, 0xFF0E0E10}, new float[] {0f, 0.7f, 1f}, Shader.TileMode.CLAMP);
+        gimbalShader = new RadialGradient(-0.02f * r, -0.02f * r, 0.08f * r,
+                new int[] {0xFFF0F0F2, 0xFFA0A0A8, 0xFF5E5E66}, new float[] {0f, 0.6f, 1f}, Shader.TileMode.CLAMP);
+    }
+
+    private void drawArm(Canvas canvas, float cx, float cy, float r) {
+        if (armBuiltFor != r) {
+            buildArm(r);
+            armBuiltFor = r;
+        }
+        if (trackAngle == 0f) {
+            trackAngle = startAngle;
+        }
+        float px = cx + PIVOT_X * r;
+        float py = cy + PIVOT_Y * r;
+        float s = swing * swing * (3 - 2 * swing);   // ease in and out
+        float theta = REST_ANGLE + (trackAngle - REST_ANGLE) * s;
+        float degrees = (float) Math.toDegrees(theta);
+
+        // Base the arm turns on (it doesn't move).
+        armPaint.setShader(null);
+        armShadow.setColor(0x59000000);
+        canvas.drawCircle(px + 0.02f * r, py + 0.03f * r, 0.15f * r, armShadow);
+        canvas.save();
+        canvas.translate(px, py);
+        armPaint.setShader(baseShader);
+        canvas.drawCircle(0, 0, 0.15f * r, armPaint);
+        armPaint.setShader(null);
+        armPaint.setStyle(Paint.Style.STROKE);
+        armPaint.setStrokeWidth(Math.max(1.5f, 0.006f * r));
+        armPaint.setColor(0x33FFFFFF);
+        canvas.drawCircle(0, 0, 0.11f * r, armPaint);
+        armPaint.setStyle(Paint.Style.FILL);
+        canvas.restore();
+
+        // The rest the arm sits on when not playing.
+        float restX = px + (float) Math.cos(REST_ANGLE) * ARM_LENGTH * 0.78f * r;
+        float restY = py + (float) Math.sin(REST_ANGLE) * ARM_LENGTH * 0.78f * r;
+        canvas.drawCircle(restX + 0.012f * r, restY + 0.018f * r, 0.035f * r, armShadow);
+        armPaint.setShader(baseShader);
+        canvas.save();
+        canvas.translate(restX, restY);
+        canvas.drawCircle(0, 0, 0.035f * r, armPaint);
+        canvas.restore();
+        armPaint.setShader(null);
+
+        // Shadow: further away and fainter as the arm rises.
+        armShadow.setColor(Color.argb(Math.round(95 - 35 * lift), 0, 0, 0));
+        canvas.save();
+        canvas.translate(px + (0.02f + 0.05f * lift) * r, py + (0.03f + 0.07f * lift) * r);
+        canvas.rotate(degrees);
+        armShape(canvas, r, armShadow, true);
+        canvas.restore();
+
+        // The arm itself, a touch larger when raised (closer to the eye).
+        float scale = 1f + 0.03f * lift;
+        canvas.save();
+        canvas.translate(px, py);
+        canvas.rotate(degrees);
+        canvas.scale(scale, scale);
+        armShape(canvas, r, armPaint, false);
+        canvas.restore();
+    }
+
+    // Drawn along +x from the pivot: counterweight, gimbal, tube, headshell with the needle at x = L.
+    private void armShape(Canvas canvas, float r, Paint p, boolean silhouette) {
+        float L = ARM_LENGTH * r;
+        // Counterweight behind the pivot.
+        rect.set(-0.30f * r, -0.065f * r, -0.10f * r, 0.065f * r);
+        if (!silhouette) {
+            p.setShader(weightShader);
+        }
+        canvas.drawRoundRect(rect, 0.02f * r, 0.02f * r, p);
+        // Tube.
+        rect.set(-0.08f * r, -0.018f * r, 0.88f * L, 0.018f * r);
+        if (!silhouette) {
+            p.setShader(tubeShader);
+        }
+        canvas.drawRoundRect(rect, 0.018f * r, 0.018f * r, p);
+        // Gimbal at the pivot.
+        if (!silhouette) {
+            p.setShader(gimbalShader);
+        }
+        canvas.drawCircle(0, 0, 0.075f * r, p);
+        // Headshell, angled like a real one, with the needle at its tip on the arm's line.
+        canvas.save();
+        canvas.translate(L, 0);
+        canvas.rotate(-18);
+        rect.set(-0.17f * r, -0.035f * r, 0.012f * r, 0.035f * r);
+        if (!silhouette) {
+            p.setShader(null);
+            p.setColor(0xFF1B1B1E);
+        }
+        canvas.drawRoundRect(rect, 0.012f * r, 0.012f * r, p);
+        // Finger lift.
+        rect.set(-0.12f * r, -0.075f * r, -0.105f * r, -0.03f * r);
+        if (!silhouette) {
+            p.setColor(0xFFB9B9C0);
+        }
+        canvas.drawRect(rect, p);
+        canvas.restore();
+        if (!silhouette) {
+            p.setShader(null);
+        }
     }
 
     private static int lerp(int a, int b, float t) {

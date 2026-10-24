@@ -44,7 +44,7 @@ Everything except the background is drawn on a 320×180 pixel grid. The verbs an
 
 ## Vinyl
 
-A launcher just for listening to Spotify. While music plays, the screen shows nothing but a record turning at 33⅓ rpm, with the album cover as its label. The background slowly fades between the cover's main colours and crossfades when the song changes. When you pause, the record slows to a stop like a turntable. When nothing is playing, there's an **Open Spotify** button and a gear.
+A launcher just for listening to Spotify. While music plays, the screen shows nothing but a record turning at 33⅓ rpm, with the album cover as its label. The background slowly fades between the cover's main colours and crossfades when the song changes. When you pause, the record slows to a stop like a turntable. A tonearm behaves like a real one. When music starts, it swings over from its rest and lowers onto the record. Pause lifts it in place, like a cue lever, and play lowers it again. When the music stops, it returns to its rest. While a song plays, the needle moves from the edge towards the label. When nothing is playing, there's an **Open Spotify** button and a gear.
 
 - **OK** plays or pauses. **Left/Right** skips to the previous or next track.
 - **Down** opens Spotify.
