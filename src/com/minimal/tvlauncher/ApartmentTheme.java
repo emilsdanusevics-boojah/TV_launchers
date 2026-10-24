@@ -28,13 +28,12 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * A modern, minimal launcher: the 3D model of the apartment fills the screen (three.js in a
- * WebView, bundled in assets/apartment), with the clock, today's weather, the apps and a
- * settings button laid over it. Colours and type follow the original Apartment page.
- *
- * Two views of the same model: "Apartment" slowly turns around the flat seen from above;
- * "Window" looks out of the living room's terrace door. Both show the live weather in Riga
- * (rain, snow, clouds, the sun at its real position) from Open-Meteo.
+ * A modern, minimal launcher: a 3D model of the apartment slowly turns in the middle of the
+ * screen (three.js in a WebView, bundled in assets/apartment), surrounded by a live picture
+ * of the sky over Riga: its colour by time of day, the sun from its real direction, clouds,
+ * stars, rain, snow and fog, from Open-Meteo's current weather. The clock, today's weather,
+ * the apps and a settings button are laid over it. Colours and type follow the original
+ * Apartment page.
  */
 class ApartmentTheme implements LauncherTheme {
 
@@ -49,7 +48,6 @@ class ApartmentTheme implements LauncherTheme {
     private static final int LINE = 0x24ECEBE8;
 
     private final MainActivity activity;
-    private final boolean windowView;
     private final Handler handler = new Handler();
     private Typeface light;
     private Typeface medium;
@@ -73,10 +71,8 @@ class ApartmentTheme implements LauncherTheme {
         }
     };
 
-    /** {@code windowView}: look out of the terrace door instead of circling the flat. */
-    ApartmentTheme(MainActivity activity, boolean windowView) {
+    ApartmentTheme(MainActivity activity) {
         this.activity = activity;
-        this.windowView = windowView;
     }
 
     private int dp(float v) {
@@ -107,7 +103,7 @@ class ApartmentTheme implements LauncherTheme {
                     pushWeather(Weather.cached());
                 }
             });
-            web.loadUrl("file:///android_asset/apartment/index.html" + (windowView ? "#window" : ""));
+            web.loadUrl("file:///android_asset/apartment/index.html");
             root.addView(web, new FrameLayout.LayoutParams(-1, -1));
         } catch (Exception e) {
             web = null;
@@ -125,7 +121,7 @@ class ApartmentTheme implements LauncherTheme {
         time = text(light, 88, FG);
         time.setIncludeFontPadding(false);
         time.setLetterSpacing(-0.02f);
-        date = text(medium, 14, MUTED);
+        date = text(medium, 14, 0xD9ECEBE8);   // bright enough for a pale daytime sky
         date.setLetterSpacing(0.14f);
         date.setAllCaps(true);
         clock.addView(time);

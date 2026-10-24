@@ -1,22 +1,22 @@
 // The apartment model from "Apartment 95" (three.js) as the TV launcher's background:
-// the model and its outdoor weather (sky, sun by the real time in Riga, clouds, rain, snow,
-// fog, thunder) are unchanged from the original page; its controls and panel are replaced
-// by a camera for the launcher, and the weather is fed by the app (window.setWeather).
-// Bundled into ../assets/apartment/apartment.js by web/build.sh.
+// the model and its outdoor weather code (sun by the real time in Riga, rain, snow, fog,
+// thunder) are unchanged from the original page; its controls and panel are replaced by a
+// slow orbit, and the weather is fed by the app (window.setWeather).
 //
-// Two views, chosen with #window (or ?view=window) in the page address:
-//   orbit   (Apartment launcher) a slow turn around the flat seen from above
-//   window  (Window launcher)    from the living room out through the terrace door
+// The space around the flat is a live picture of the sky over Brīvības iela 95: its colour
+// follows the time of day and the cloud cover, the sun glows from its real direction, clouds
+// drift with the real wind, stars come out on clear nights, and rain, snow, fog and
+// lightning fill the whole background (see the "sky backdrop" section).
+// Bundled into ../assets/apartment/apartment.js by web/build.sh.
 
-const VIEW = location.hash === "#window" || new URLSearchParams(location.search).get("view") === "window" ? "window" : "orbit";
-const SCENE_COLOR = "#1d1e20";   // the original's dark-mode scene colour
 const ORBIT_SECONDS = 150;       // one full turn
 
-// The ceiling only shows when looking from inside.
+// Seen from above: no ceiling.
 function applyToggles() {
-  if (ceiling) ceiling.visible = VIEW === "window";
+  if (ceiling) ceiling.visible = false;
 }
 
+// ==== MODEL START: generated from the apartment page by web/import_model.py ====
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -26,7 +26,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 const stage = document.getElementById("stage");
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 // Render resolution, as a width in pixels. It starts a little under 1080p and is adjusted
-// while running so the TV keeps up with every screen refresh (see "smooth motion" below).
+// while running so the TV keeps up with every screen refresh (see "smooth motion").
 const MIN_WIDTH = 960, MAX_WIDTH = 1920;
 let renderWidth = 1600;
 renderer.setPixelRatio(renderWidth / innerWidth);
@@ -39,7 +39,7 @@ stage.appendChild(renderer.domElement);
 
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(SCENE_COLOR);
+scene.background = null;   // the sky backdrop (below) fills the background
 
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -226,6 +226,22 @@ const M = {
   }, null), roughness: 1 }),
   sofa: new THREE.MeshStandardMaterial({ map: canvasTex(256, 256, (c, w, h) => noiseFill(c, w, h, "#a8a6a1", 26, 13), [0.15, 0.15]), roughness: 1, envMapIntensity: 0.25 }),
   piping: new THREE.MeshStandardMaterial({ color: 0xe9e3d6, roughness: 0.8 }),
+  deskWhite: new THREE.MeshStandardMaterial({ color: 0xf5f5f3, roughness: 0.4, envMapIntensity: 0.5 }),
+  mesh: new THREE.MeshStandardMaterial({ map: canvasTex(128, 128, (c, w, h) => { c.clearRect(0, 0, w, h); c.strokeStyle = "#f4f4f2"; c.lineWidth = 3; for (let k = 0; k <= w; k += 16) { c.beginPath(); c.moveTo(k, 0); c.lineTo(k, h); c.stroke(); c.beginPath(); c.moveTo(0, k); c.lineTo(w, k); c.stroke(); } }, [0.12, 0.12]), transparent: true, alphaTest: 0.4, roughness: 0.4, side: THREE.DoubleSide }),
+  deskMat: new THREE.MeshStandardMaterial({ color: 0x1e1f21, roughness: 0.95 }),
+  keycap: new THREE.MeshStandardMaterial({ color: 0x2e2f33, roughness: 0.6 }),
+  mousePink: new THREE.MeshStandardMaterial({ color: 0xe9d3d1, roughness: 0.45 }),
+  laptop: new THREE.MeshStandardMaterial({ color: 0x55575c, roughness: 0.35, metalness: 0.6 }),
+  frameWhite: new THREE.MeshStandardMaterial({ color: 0xf6f6f4, roughness: 0.4 }),
+  matBoard: new THREE.MeshStandardMaterial({ color: 0xfbfaf7, roughness: 0.9 }),
+  chrome: new THREE.MeshStandardMaterial({ color: 0xe6e8ea, roughness: 0.12, metalness: 1, envMapIntensity: 1.3 }),
+  beech: new THREE.MeshStandardMaterial({ map: oakTex, color: 0xffd99a, roughness: 0.35, envMapIntensity: 0.6 }),
+  chairFabric: new THREE.MeshStandardMaterial({ map: canvasTex(256, 256, (c, w, h) => {
+    noiseFill(c, w, h, "#b9ab98", 16, 61); const r = rnd(62);
+    for (let i = 0; i < 90; i++) { c.fillStyle = r() > 0.5 ? "rgba(120,112,104,0.35)" : "rgba(235,222,200,0.45)"; c.beginPath(); c.ellipse(r() * w, r() * h, 4 + r() * 16, 2 + r() * 8, r() * 3, 0, 7); c.fill(); }
+  }, [0.25, 0.25]), roughness: 0.95 }),
+  cavity: new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 1 }),
+  bamboo: new THREE.MeshStandardMaterial({ color: 0xd9b77a, roughness: 0.6 }),
   rugEdge: new THREE.MeshStandardMaterial({ color: 0xd98f45, roughness: 1 }),
   radiator: new THREE.MeshStandardMaterial({ color: 0xf4f4f2, roughness: 0.4, envMapIntensity: 0.5 }),
   grille: new THREE.MeshStandardMaterial({ color: 0x9c9c98, roughness: 0.6 }),
@@ -567,6 +583,152 @@ function build(H) {
   });
   [[SX0, 0.9], [SX1, 0.9]].forEach(([x]) => box(x - 0.004, x + 0.004, 0.06, 1.99, SZ0 + 0.02, SZ0 + 0.03, M.shelfWhite, { cast: false }));
 
+  /* ----- work corner on the same wall (z = 0), between the shelf and the slatted nook; placed from the photo ----- */
+  const DX0 = 2.85, DX1 = 4.25, DD = 0.6, DH = 0.75;
+  box(DX0, DX1, DH - 0.025, DH, 0.0, DD, M.deskWhite);                            // white desk top, 140 × 60 cm
+  // two white metal trestle units with mesh shelves and small castors
+  [[DX0 + 0.06, DX0 + 0.44], [DX1 - 0.44, DX1 - 0.06]].forEach(([a, b], k) => {
+    [[a, 0.06], [b, 0.06], [a, DD - 0.06], [b, DD - 0.06]].forEach(([x, z]) => {
+      box(x - 0.012, x + 0.012, 0.04, DH - 0.025, z - 0.012, z + 0.012, M.shelfWhite);
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.035, 12).rotateZ(Math.PI / 2), M.black);
+      w.position.set(x, 0.02, z); root.add(w);
+    });
+    (k === 0 ? [0.12, 0.45] : [0.12, 0.33, 0.52]).forEach(y => {
+      box(a, b, y, y + 0.012, 0.06, DD - 0.06, M.mesh, { cast: false });
+      box(a, b, y + 0.012, y + 0.035, DD - 0.072, DD - 0.06, M.shelfWhite, { cast: false });   // front rail
+    });
+  });
+  // desk mat, keyboard, mouse
+  box(3.06, 3.96, DH, DH + 0.004, 0.2, 0.56, M.deskMat, { cast: false });
+  box(3.34, 3.70, DH + 0.004, DH + 0.024, 0.31, 0.44, M.black);
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 15; c++) box(3.35 + c * 0.0225, 3.35 + c * 0.0225 + 0.018, DH + 0.024, DH + 0.032, 0.318 + r * 0.023, 0.318 + r * 0.023 + 0.018, M.keycap, { cast: false });
+  const mouse = new THREE.Mesh(new THREE.SphereGeometry(0.035, 20, 12).scale(0.9, 0.5, 1.45), M.mousePink);
+  mouse.position.set(3.82, DH + 0.012, 0.42); mouse.castShadow = true; root.add(mouse);
+  // 27" monitor on a V-shaped foot
+  const monTex = canvasTex(512, 300, (c, w, h) => {
+    c.fillStyle = "#1d2025"; c.fillRect(0, 0, w, h); c.fillStyle = "#2a2e35"; c.fillRect(0, 0, w, 14); c.fillRect(0, 14, 70, h);
+    const r = rnd(8); c.fillStyle = "#8a93a3";
+    for (let y = 30; y < h - 20; y += 9) { const x = 150 + r() * 20; c.globalAlpha = 0.35 + r() * 0.4; c.fillRect(x, y, 120 + r() * 160, 3); }
+    c.globalAlpha = 0.5; for (let y = 24; y < h - 20; y += 12) c.fillRect(10, y, 40 + r() * 15, 3);
+    c.globalAlpha = 1;
+  }, null);
+  box(3.07, 3.69, 0.855, 1.225, 0.165, 0.19, M.black);
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.345), new THREE.MeshStandardMaterial({ map: monTex, emissive: 0xffffff, emissiveMap: monTex, emissiveIntensity: 0.9, roughness: 0.3 }));
+  scr.position.set(3.38, 1.04, 0.1905); root.add(scr);
+  box(3.36, 3.40, DH, 0.9, 0.12, 0.15, M.black);                                 // neck
+  const footL = box(3.15, 3.40, DH, DH + 0.012, 0.12, 0.15, M.black); footL.geometry.translate(-3.275, 0, -0.135); footL.position.set(3.275, 0, 0.135); footL.rotation.y = -0.45;
+  const footR = box(3.36, 3.61, DH, DH + 0.012, 0.12, 0.15, M.black); footR.geometry.translate(-3.485, 0, -0.135); footR.position.set(3.485, 0, 0.135); footR.rotation.y = 0.45;
+  // clamp-on pole with an arm holding a ventilated laptop tray
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.5, 14), M.black);
+  pole.position.set(3.74, DH + 0.25, 0.06); pole.castShadow = true; root.add(pole);
+  box(3.72, 3.98, 0.9, 0.93, 0.05, 0.08, M.black);
+  const tray = new THREE.Group(); tray.position.set(4.02, 0.88, 0.3); tray.rotation.x = -0.22; root.add(tray);
+  rb(0.38, 0.012, 0.28, 0.004, M.black, 0, 0, 0, tray);
+  rb(0.38, 0.03, 0.012, 0.004, M.black, 0, 0.015, 0.135, tray);                  // front lip
+  rb(0.32, 0.016, 0.22, 0.006, M.laptop, 0, 0.014, 0.01, tray);                    // laptop base
+  const lid = new THREE.Group(); lid.position.set(0, 0.022, -0.1); lid.rotation.x = -1.85 + 1.57 - 0.25; tray.add(lid);
+  rb(0.32, 0.21, 0.01, 0.006, M.laptop, 0, 0.105, 0, lid);
+  const lscr = new THREE.Mesh(new THREE.PlaneGeometry(0.29, 0.18), new THREE.MeshStandardMaterial({ map: monTex, emissive: 0xffffff, emissiveMap: monTex, emissiveIntensity: 0.8 }));
+  lscr.position.set(0, 0.105, 0.0055); lid.add(lscr);
+
+  // wall art: 50 × 70 print and 30 × 40 print in white frames with mats
+  function framed(cx, y0, w, h, art, mat = 0.06) {
+    const g = new THREE.Group(); g.position.set(cx, y0 + h / 2, 0); root.add(g);
+    const fw = 0.025, d = 0.025;
+    [[0, h / 2 - fw / 2, w, fw], [0, -h / 2 + fw / 2, w, fw], [-w / 2 + fw / 2, 0, fw, h], [w / 2 - fw / 2, 0, fw, h]].forEach(([x, y, a, b]) => rb(a, b, d, 0.004, M.frameWhite, x, y, d / 2, g));
+    const mt = new THREE.Mesh(new THREE.PlaneGeometry(w - 2 * fw, h - 2 * fw), M.matBoard); mt.position.z = 0.008; g.add(mt);
+    const pic = new THREE.Mesh(new THREE.PlaneGeometry(w - 2 * fw - 2 * mat, h - 2 * fw - 2 * mat), new THREE.MeshStandardMaterial({ map: art, roughness: 0.6 }));
+    pic.position.z = 0.009; g.add(pic);
+    const gl = new THREE.Mesh(new THREE.PlaneGeometry(w - 2 * fw, h - 2 * fw), M.glass); gl.position.z = 0.02; g.add(gl);
+  }
+  const bigArt = canvasTex(400, 560, (c, w, h) => {
+    const bg = c.createLinearGradient(0, 0, w, h); bg.addColorStop(0, "#4a5a6a"); bg.addColorStop(1, "#2f3440");
+    c.fillStyle = bg; c.fillRect(0, 0, w, h);
+    c.fillStyle = "#c98c6a"; c.fillRect(0, h * 0.68, w, h * 0.32);                        // table top
+    c.fillStyle = "#e9a6b8"; c.fillRect(w * 0.42, h * 0.1, w * 0.18, h * 0.32);         // pink panel
+    c.fillStyle = "#5fb0c9"; c.fillRect(w * 0.6, h * 0.04, w * 0.16, h * 0.4);         // blue panel
+    c.fillStyle = "#f08a2c"; c.beginPath(); c.moveTo(w * 0.12, h * 0.72); c.lineTo(w * 0.12, h * 0.3); c.lineTo(w * 0.2, h * 0.2); c.lineTo(w * 0.2, h * 0.08); c.lineTo(w * 0.3, h * 0.08); c.lineTo(w * 0.3, h * 0.2); c.lineTo(w * 0.4, h * 0.3); c.lineTo(w * 0.4, h * 0.72); c.fill();
+    c.fillStyle = "#f6c26b"; c.globalAlpha = 0.7; c.fillRect(w * 0.05, h * 0.42, w * 0.14, h * 0.18); c.globalAlpha = 1;
+    c.strokeStyle = "rgba(220,240,240,0.8)"; c.lineWidth = 3; c.fillStyle = "rgba(170,210,215,0.35)";
+    c.beginPath(); c.ellipse(w * 0.66, h * 0.62, w * 0.2, h * 0.13, 0, 0, Math.PI * 2); c.fill(); c.stroke();
+    c.fillRect(w * 0.56, h * 0.3, w * 0.2, h * 0.2); c.strokeRect(w * 0.56, h * 0.3, w * 0.2, h * 0.2);
+    c.fillStyle = "#6f9a3e"; [[0.6, 0.6], [0.68, 0.64], [0.74, 0.58], [0.64, 0.68]].forEach(([x, y]) => { c.beginPath(); c.arc(w * x, h * y, w * 0.045, 0, 7); c.fill(); });
+    c.fillStyle = "#d9e04f"; c.beginPath(); c.arc(w * 0.86, h * 0.7, w * 0.05, 0, 7); c.fill();
+    c.fillStyle = "#efe8dc"; c.fillRect(w * 0.08, h * 0.88, w * 0.1, h * 0.08);
+  }, null);
+  const smallArt = canvasTex(240, 320, (c, w, h) => {
+    c.fillStyle = "#d9cdbb"; c.fillRect(0, 0, w, h);
+    c.fillStyle = "#8a8f86"; c.fillRect(0, h * 0.55, w, h * 0.12);
+    c.fillStyle = "#7a9a52"; c.fillRect(0, h * 0.67, w, h * 0.33);
+    c.fillStyle = "#5e7a3e"; for (let i = 0; i < 40; i++) { c.beginPath(); c.arc(Math.random() * w, h * 0.7 + Math.random() * h * 0.3, 6 + Math.random() * 8, 0, 7); c.fill(); }
+    c.fillStyle = "#a9a39a"; c.beginPath(); c.arc(w * 0.5, h * 0.22, w * 0.07, 0, 7); c.fill();
+    c.fillRect(w * 0.42, h * 0.27, w * 0.16, h * 0.32); c.fillStyle = "#8f877c"; c.fillRect(w * 0.38, h * 0.58, w * 0.24, h * 0.06);
+  }, null);
+  framed(3.06, 1.08, 0.5, 0.7, bigArt);
+  framed(3.53, 1.08, 0.3, 0.4, smallArt, 0.035);
+  // six polaroids in two rows above the small frame
+  const borders = ["#f2f0ea", "#f2f0ea", "#e9718f", "#e88a2e", "#d9473a", "#e88a2e"];
+  borders.forEach((col, i) => {
+    const t = canvasTex(86, 100, (c, w, h) => {
+      c.fillStyle = col; c.fillRect(0, 0, w, h);
+      const r = rnd(30 + i * 7), g = c.createLinearGradient(0, 0, 0, 72);
+      g.addColorStop(0, ["#3a4a5a", "#9aa7b8", "#5a4636", "#2c3d2c", "#3f6a3a", "#2a2f38"][i]); g.addColorStop(1, "#1d1c1b");
+      c.fillStyle = g; c.fillRect(7, 7, 72, 70);
+      c.fillStyle = "rgba(230,200,170,0.65)"; c.beginPath(); c.arc(25 + r() * 36, 35 + r() * 20, 8 + r() * 6, 0, 7); c.fill();
+    }, null);
+    const q = new THREE.Mesh(new THREE.PlaneGeometry(0.086, 0.1), new THREE.MeshStandardMaterial({ map: t, roughness: 0.5 }));
+    q.position.set(3.42 + (i % 3) * 0.108, i < 3 ? 1.69 : 1.56, 0.003); root.add(q);
+  });
+  // round VARMBLIXT-style LED wall lamp, glowing pink-orange, cable down to the desk
+  const lampTex = canvasTex(256, 256, (c, w, h) => {
+    const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, "#ff6a2a"); g.addColorStop(0.7, "#f04e12"); g.addColorStop(1, "#c93c08");
+    c.fillStyle = g; c.beginPath(); c.arc(w / 2, h / 2, w / 2 - 1, 0, 7); c.fill();
+  }, null);
+  // doughnut: a puffy glowing ring (Ø30 cm) around a recessed centre with the orange dot
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.105, 0.046, 32, 72),
+    M.orangeGlow);   // same glowing orange as the floor lamp by the TV
+  ring.scale.z = 0.85; ring.position.set(3.9, 1.28, 0.042); root.add(ring);
+  const hub = new THREE.Mesh(new THREE.CircleGeometry(0.07, 48), new THREE.MeshBasicMaterial({ map: lampTex, toneMapped: false }));
+  hub.position.set(3.9, 1.28, 0.02); root.add(hub);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.016, 20, 12), new THREE.MeshBasicMaterial({ color: 0xffb070, toneMapped: false }));
+  dot.scale.z = 0.5; dot.position.set(3.9, 1.28, 0.026); root.add(dot);
+  const lampLight = new THREE.PointLight(0xff6a2a, 2.2, 3, 2); lampLight.position.set(3.9, 1.28, 0.25); lightsGroup.add(lampLight);
+  box(3.915, 3.922, DH, 1.13, 0.008, 0.015, M.plastic, { cast: false });
+
+  /* ----- cantilever desk chair: chrome tube, honey-beech seat and back rims, patterned beige fabric ----- */
+  const chair = new THREE.Group(); chair.position.set(3.45, 0, 0.88); chair.rotation.y = Math.PI + 0.12; root.add(chair);
+  const ctube = (pts) => {
+    const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)), false, "catmullrom", 0.2), 80, 0.0115, 10, false);
+    const m = new THREE.Mesh(g, M.chrome); m.castShadow = true; chair.add(m);
+  };
+  [-0.215, 0.215].forEach(x => ctube([[x, 0.92, -0.25], [x, 0.6, -0.235], [x, 0.47, -0.21], [x, 0.43, -0.15], [x, 0.43, 0.17], [x, 0.4, 0.235], [x, 0.24, 0.265], [x, 0.06, 0.245], [x, 0.015, 0.18], [x, 0.015, -0.15], [x * 0.9, 0.015, -0.205]]));
+  ctube([[-0.19, 0.015, -0.205], [-0.12, 0.015, -0.225], [0, 0.015, -0.23], [0.12, 0.015, -0.225], [0.19, 0.015, -0.205]]);
+  rb(0.47, 0.045, 0.45, 0.02, M.beech, 0, 0.465, 0.01, chair);                    // seat rim
+  rb(0.41, 0.012, 0.39, 0.005, M.chairFabric, 0, 0.489, 0.01, chair);             // seat fabric
+  const back = rb(0.45, 0.33, 0.035, 0.03, M.beech, 0, 0.76, -0.245, chair); back.rotation.x = -0.12;
+  const backF = rb(0.39, 0.27, 0.012, 0.005, M.chairFabric, 0, 0.76, -0.225, chair); backF.rotation.x = -0.12;
+
+  /* ----- opposite the desk: vertical double Murphy bed cabinet (folded up) and a bamboo floor lamp ----- */
+  const BX0 = 2.3, BX1 = 4.05, BZ1 = 3.6, BZ0 = 3.15, BH = 2.08;
+  box(BX0, BX0 + 0.03, 0, BH, BZ0, BZ1, M.deskWhite);                              // side panels
+  box(BX1 - 0.03, BX1, 0, BH, BZ0, BZ1, M.deskWhite);
+  box(BX0, BX1, BH - 0.06, BH, BZ0, BZ1, M.deskWhite);                             // top
+  box(BX0, BX1, 0, 0.04, BZ0, BZ1, M.deskWhite);                                   // plinth
+  box(BX0 + 0.03, BX1 - 0.03, 0.04, BH - 0.06, BZ0 + 0.06, BZ0 + 0.08, M.cavity, { cast: false });  // shadow gap behind the bed front
+  box(BX0 + 0.05, BX1 - 0.05, 0.06, BH - 0.1, BZ0 + 0.01, BZ0 + 0.06, M.deskWhite);  // bed front (two panels)
+  box((BX0 + BX1) / 2 - 0.002, (BX0 + BX1) / 2 + 0.002, 0.07, BH - 0.11, BZ0 + 0.008, BZ0 + 0.011, M.seam, { cast: false });
+  // bamboo cylinder lamp, glowing orange from inside
+  const bl = new THREE.Group(); bl.position.set(4.2, 0, 3.33); root.add(bl);
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 1.0, 24), M.orangeGlow); core.position.y = 0.56; bl.add(core);
+  for (let k = 0; k < 26; k++) {
+    const a = k / 26 * Math.PI * 2, s = new THREE.Mesh(new THREE.BoxGeometry(0.014, 1.08, 0.006), M.bamboo);
+    s.position.set(Math.cos(a) * 0.105, 0.58, Math.sin(a) * 0.105); s.rotation.y = -a + Math.PI / 2; s.castShadow = true; bl.add(s);
+  }
+  [0.06, 0.34, 0.62, 0.9, 1.11].forEach(y => { const r = new THREE.Mesh(new THREE.TorusGeometry(0.108, 0.006, 6, 40).rotateX(Math.PI / 2), M.bamboo); r.position.y = y; bl.add(r); });
+  const blBase = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.03, 32), M.bamboo); blBase.position.y = 0.015; bl.add(blBase);
+  const blLight = new THREE.PointLight(0xff6a2a, 2.4, 3.2, 2); blLight.position.set(4.2, 0.8, 3.15); lightsGroup.add(blLight);
+
   /* ----- outdoor terrace: 3.6 m out from the facade × 4.0 m along it ----- */
   const TZ0 = 1.05, TZ1 = 5.05, TX = -3.75;   // starts 0.20 m past the door's right-hand jamb (seen from inside)
   box(TX, -0.15, -0.15, -0.03, TZ0, TZ1, M.deck);                              // decking
@@ -649,7 +811,7 @@ function build(H) {
 
   applyToggles();
 }
-
+// ==== MODEL END ====
 
 // The light only moves when the sun does (once a minute), so shadows are drawn on demand.
 renderer.shadowMap.autoUpdate = false;
@@ -838,17 +1000,16 @@ setInterval(applyAtmosphere, 60000);
 
 /* ---------- launcher ---------- */
 
-// After every weather/sun update: redraw the shadows (the sun has moved). From above,
-// sky, clouds, stars and fog would sit between the camera and the flat, so they're off.
+// The original's sky dome, clouds and stars would sit between this high camera and the
+// flat, so they stay hidden; the backdrop below shows the sky instead.
 function afterAtmosphere() {
-  if (VIEW === "orbit") {
-    scene.fog = null;
-    scene.background = new THREE.Color(SCENE_COLOR);
-    sky.visible = false;
-    starMat.visible = false;
-    clouds.forEach(s => { s.visible = false; });
-  }
-  renderer.shadowMap.needsUpdate = true;
+  scene.fog = null;
+  scene.background = null;
+  sky.visible = false;
+  starMat.visible = false;
+  clouds.forEach(s => { s.visible = false; });
+  if (window.__backdropReady) updateBackdrop();   // the first update runs before it exists
+  renderer.shadowMap.needsUpdate = true;   // the sun has moved
 }
 
 /** Called by the app with live conditions: { code, tempC, windKmh, windFrom, summary, observedAt }. */
@@ -863,7 +1024,7 @@ window.setWeather = (w) => {
 // Nothing in it moves, so bake every mesh into world space and merge them per material:
 // the picture is identical but each frame needs a few dozen draw calls instead of hundreds.
 function mergeStatic() {
-  if (VIEW === "orbit") root.remove(ceiling);
+  root.remove(ceiling);
   root.updateMatrixWorld(true);
   const byMaterial = new Map();
   root.traverse(o => {
@@ -894,46 +1055,159 @@ function mergeStatic() {
 }
 mergeStatic();
 
-// Orbit: a steep view from above, like the original "Overview", turning slowly.
+/* ---------- sky backdrop ----------
+   One full-screen shader drawn behind the flat. Colours come from the original's sky
+   (time of day and cloud cover); everything else is generated here: the sun's glow from its
+   real direction, clouds drifting with the wind, stars, rain, snow, fog and lightning.
+   Clouds and stars are fixed to the world, so they turn with the view. */
+const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  uniforms: {
+    uTop: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() },
+    uSunColor: { value: new THREE.Color(1, 0.85, 0.6) }, uHaze: { value: new THREE.Color() },
+    uSun: { value: new THREE.Vector2(0.5, 1.2) }, uWind: { value: new THREE.Vector2() },
+    uSunVis: { value: 0 }, uDusk: { value: 0 }, uDay: { value: 1 }, uCloud: { value: 0.5 },
+    uRain: { value: 0 }, uSnow: { value: 0 }, uFog: { value: 0 }, uFlash: { value: 0 },
+    uTime: { value: 0 }, uAngle: { value: 0 }, uAspect: { value: 16 / 9 },
+  },
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+  fragmentShader: `
+    uniform vec3 uTop, uHorizon, uSunColor, uHaze;
+    uniform vec2 uSun, uWind;
+    uniform float uSunVis, uDusk, uDay, uCloud, uRain, uSnow, uFog, uFlash, uTime, uAngle, uAspect;
+    varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float noise(vec2 p) {
+      vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+    }
+    float fbm(vec2 p) {
+      float v = 0.0, a = 0.5;
+      for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; }
+      return v;
+    }
+    void main() {
+      vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0);
+      // Sky: zenith colour at the top of the screen, the horizon's towards the bottom.
+      vec3 col = mix(uHorizon, uTop, smoothstep(-0.15, 1.05, vUv.y));
+      // The sun's glow, and the warm side of the sky around sunrise and sunset.
+      vec2 sp = (uSun - 0.5) * vec2(uAspect, 1.0);
+      float d = length(p - sp);
+      col += uSunColor * (uSunVis * (0.55 * exp(-d * d * 60.0) + 0.18 * exp(-d * d * 4.0)) + uDusk * 0.5 * exp(-d * d * 1.1));
+      // World-fixed coordinates, turning with the orbit.
+      float c = cos(uAngle), s = sin(uAngle);
+      vec2 w = mat2(c, -s, s, c) * p;
+      // Stars on clear nights.
+      vec2 g = w * 85.0; vec2 cell = floor(g); float h = hash(cell);
+      float star = step(0.986, h) * smoothstep(0.32, 0.0, length(fract(g) - 0.5)) * (0.65 + 0.35 * sin(uTime * 1.7 + h * 40.0));
+      col += vec3(star) * (1.0 - uDay) * (1.0 - uCloud) * 0.9;
+      // Clouds, as much as the real cover, drifting with the wind.
+      vec2 q = w * 2.0 - uWind * uTime * 0.01;
+      float n = fbm(q) * 0.65 + fbm(q * 2.6 + 3.1) * 0.35;
+      float edge = 1.0 - uCloud * 0.8;
+      float cover = smoothstep(edge - 0.14, edge + 0.26, n);
+      vec3 cloudCol = mix(vec3(0.14, 0.16, 0.21), mix(vec3(0.96), vec3(0.58, 0.6, 0.64), uCloud), uDay);
+      cloudCol = mix(cloudCol, vec3(1.0, 0.7, 0.55), uDusk * 0.45 * (1.0 - uCloud * 0.6));
+      col = mix(col, cloudCol, cover * (0.5 + 0.45 * uCloud));
+      // Fog: everything fades into the haze.
+      col = mix(col, uHaze, uFog * 0.6);
+      // Rain: slanted streaks falling across the whole sky.
+      if (uRain > 0.0) {
+        vec2 r = vec2(p.x + p.y * 0.18, p.y);
+        vec2 rg = vec2(r.x * 150.0, r.y * 5.0 + uTime * 7.0);
+        float col_ = floor(rg.x), off = hash(vec2(col_, 3.0)) * 9.0;
+        float y = rg.y + off, seg = floor(y), t = fract(y);
+        float on = step(1.0 - uRain * 0.4, hash(vec2(col_, seg)));
+        float streak = on * smoothstep(0.0, 0.15, t) * smoothstep(0.55, 0.25, t) * smoothstep(0.5, 0.05, abs(fract(rg.x) - 0.5));
+        col = mix(col, vec3(0.78, 0.83, 0.9), streak * 0.4);
+      }
+      // Snow: three layers of drifting flakes.
+      if (uSnow > 0.0) {
+        for (int k = 0; k < 3; k++) {
+          float fk = float(k);
+          vec2 sg = p * (12.0 + fk * 7.0) + vec2(sin(uTime * 0.4 + fk * 2.0) * 0.7, uTime * (0.45 + fk * 0.2));
+          vec2 sc = floor(sg);
+          vec2 o = vec2(hash(sc + 1.3), hash(sc + 7.7)) - 0.5;
+          float flake = step(1.0 - uSnow * 0.5, hash(sc + fk * 13.0)) * smoothstep(0.13 - fk * 0.03, 0.0, length(fract(sg) - 0.5 - o * 0.6));
+          col += vec3(flake) * (0.75 - fk * 0.18);
+        }
+      }
+      col += uFlash * vec3(0.55, 0.6, 0.75);
+      col *= 0.9;   // a touch calmer, so the clock and apps stand out
+      gl_FragColor = vec4(col, 1.0);
+      #include <colorspace_fragment>
+    }`,
+  depthTest: false, depthWrite: false,
+}));
+backdrop.frustumCulled = false;
+backdrop.renderOrder = -1000;
+scene.add(backdrop);
+const BU = backdrop.material.uniforms;
+window.__backdropReady = true;
+
+// Weather and time of day, refreshed with the atmosphere (every minute and on new weather).
+let sunAlt = 0;
+function updateBackdrop() {
+  const now = window.launcherNow ? new Date(window.launcherNow) : new Date();
+  const { alt, dir } = sunPos(now);
+  sunAlt = alt;
+  BU.uTop.value.copy(skyMat.uniforms.top.value);
+  BU.uHorizon.value.copy(skyMat.uniforms.horizon.value);
+  BU.uHaze.value.copy(skyMat.uniforms.horizon.value);
+  BU.uSunVis.value = skyMat.uniforms.sunVis.value;
+  BU.uDusk.value = Math.max(0, 1 - Math.abs(alt) / 0.25) * (1 - fx.cloud * 0.6);
+  BU.uSunColor.value.setRGB(1, 0.86, 0.62).lerp(new THREE.Color(1, 0.55, 0.32), BU.uDusk.value);
+  BU.uDay.value = day;
+  BU.uCloud.value = fx.cloud;
+  BU.uRain.value = fx.rain;
+  BU.uSnow.value = fx.snow;
+  BU.uFog.value = fx.fog;
+  BU.uWind.value.set(wind.x, wind.z);
+  backdrop.userData.sunDir = dir;
+}
+updateBackdrop();
+
+// The sun's place on screen, from its real direction relative to where the camera faces:
+// ahead of the camera is the top of the screen, behind it the bottom; the higher the sun,
+// the further in from the edge.
+function placeSunOnScreen() {
+  const dir = backdrop.userData.sunDir;
+  if (!dir) return;
+  const h = Math.hypot(dir.x, dir.z) || 1, hx = dir.x / h, hz = dir.z / h;
+  const ahead = -Math.sin(angle) * hx - Math.cos(angle) * hz;
+  const right = Math.cos(angle) * hx - Math.sin(angle) * hz;
+  const r = 0.62 - 0.35 * Math.min(1, Math.max(0, sunAlt / 0.9));
+  BU.uSun.value.set(0.5 + right * r / BU.uAspect.value * 1.4, 0.5 + ahead * r);
+}
+
+// A steep view from above, like the original "Overview", turning slowly.
 const target = new THREE.Vector3(4.3, 0, 2.6);   // middle of flat + terrace
 const RADIUS = 11.5, HEIGHT = 20;
-// Window: standing in the living room, looking out of the glazed terrace door.
-const EYE = new THREE.Vector3(0.62, 1.38, 1.8), LOOK = new THREE.Vector3(-6, 2.45, 1.8);
-
-camera.fov = VIEW === "window" ? 74 : 42;
+camera.fov = 42;
 camera.updateProjectionMatrix();
 
-// The angle comes from the clock, not a frame count, so the motion speed is always the same.
+// The angle comes from the clock, not a frame count, so the turn speed is always the same.
 let paused = false, angle = 0.6, last = 0, time = 0;
 window.launcherPause = (p) => { paused = p; last = 0; slow = fast = 0; };
 // For previews and checks.
-window.launcherStats = () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, renderWidth, view: VIEW, weather });
+window.launcherStats = () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, renderWidth, weather });
 // For previews: pretend it's this time (an ISO date string) when placing the sun.
 window.launcherNow = null;
-window.launcherAngle = (a) => { angle = a; time = a * 20; place(); renderer.render(scene, camera); };
+window.launcherAngle = (a) => { angle = a; place(); renderer.render(scene, camera); };
 
-const look = new THREE.Vector3();
 function place() {
-  if (VIEW === "window") {
-    // A slow, slight drift so the room feels lived in rather than frozen.
-    const yaw = Math.sin(time / 23) * 0.025, rise = Math.sin(time / 31) * 0.015;
-    camera.position.set(EYE.x, EYE.y + rise * 0.5, EYE.z + Math.sin(time / 41) * 0.025);
-    look.set(LOOK.x, LOOK.y + rise * 3, LOOK.z + Math.sin(yaw) * (EYE.x - LOOK.x));
-    camera.lookAt(look);
-  } else {
-    camera.position.set(target.x + Math.sin(angle) * RADIUS, HEIGHT, target.z + Math.cos(angle) * RADIUS);
-    camera.lookAt(target);
-  }
+  camera.position.set(target.x + Math.sin(angle) * RADIUS, HEIGHT, target.z + Math.cos(angle) * RADIUS);
+  camera.lookAt(target);
+  BU.uAngle.value = angle;
+  BU.uTime.value = time;
+  BU.uFlash.value = flash > 0 && fx.thunder ? 0.6 : 0;
+  placeSunOnScreen();
 }
 
-// Orbit view: nudge the model up and right, into the space between the clock and the app row.
+// Nudge the model up and right, into the space between the clock and the app row.
 function frame() {
   camera.aspect = innerWidth / innerHeight;
-  if (VIEW === "orbit") {
-    camera.setViewOffset(innerWidth, innerHeight, -innerWidth * 0.06, innerHeight * 0.06, innerWidth, innerHeight);
-  } else {
-    camera.updateProjectionMatrix();
-  }
+  camera.setViewOffset(innerWidth, innerHeight, -innerWidth * 0.06, innerHeight * 0.06, innerWidth, innerHeight);
+  BU.uAspect.value = innerWidth / innerHeight;
   renderer.setPixelRatio(renderWidth / innerWidth);
   renderer.setSize(innerWidth, innerHeight);
 }
