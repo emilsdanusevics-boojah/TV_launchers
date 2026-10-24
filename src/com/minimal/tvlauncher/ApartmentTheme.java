@@ -106,7 +106,7 @@ class ApartmentTheme implements LauncherTheme {
         dateParams.leftMargin = dp(4);
         clock.addView(date, dateParams);
         FrameLayout.LayoutParams clockParams = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
-        clockParams.setMargins(dp(44), dp(40), 0, 0);
+        clockParams.setMargins(dp(32), dp(40), 0, 0);
         root.addView(clock, clockParams);
 
         // Apps along the bottom, settings at the far right.
