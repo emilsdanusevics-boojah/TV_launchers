@@ -1,6 +1,6 @@
 # Minimal TV Launcher
 
-A home screen for Android TV / Xiaomi TV with two looks. You can switch between them from the settings button in either one; the choice is remembered.
+A home screen for Android TV / Xiaomi TV with three looks. You can switch between them from the settings button in either one; the choice is remembered.
 
 ## Apartment (default)
 
@@ -15,7 +15,7 @@ The model is the three.js scene from *Apartment 028*, unchanged except that the 
 - **Left/Right** moves along the apps. **OK** opens one; **long-press OK** opens its info page.
 - **Gear** (or **Menu** on the remote) opens a menu:
   - **TV settings**
-  - **Change launcher**, where you can pick Apartment or Monkey Island
+  - **Change launcher**, where you can pick Apartment, Monkey Island or Vinyl
 - **Back** closes the menu.
 
 ## Monkey Island
@@ -41,6 +41,22 @@ Everything except the background is drawn on a 320×180 pixel grid. The verbs an
 
   **Up/Down** and **OK** choose; **Back** cancels.
 - **Home** goes back to the first app.
+
+## Vinyl
+
+A launcher just for listening to Spotify. While music plays, the screen shows nothing but a record turning at 33⅓ rpm, with the album cover as its label. The background slowly fades between the cover's main colours and crossfades when the song changes. When you pause, the record slows to a stop like a turntable. When nothing is playing, there's an **Open Spotify** button and a gear.
+
+- **OK** plays or pauses. **Left/Right** skips to the previous or next track.
+- **Down** opens Spotify.
+- **Up** (or **Menu**) opens a menu with **Open Spotify**, **TV settings** and **Change launcher**.
+
+**One-time setup.** Android only shows other apps what's playing if you give them notification access, and Android TV usually hides that setting. Grant it with adb:
+
+```sh
+adb shell cmd notification allow_listener com.minimal.tvlauncher/com.minimal.tvlauncher.MediaListener
+```
+
+Until you do, the launcher shows this command on screen.
 
 ## Choosing which apps are shown
 

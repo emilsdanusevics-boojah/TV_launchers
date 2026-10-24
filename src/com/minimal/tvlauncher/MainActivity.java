@@ -15,8 +15,8 @@ import android.view.KeyEvent;
  */
 public class MainActivity extends Activity {
 
-    static final String[] LAUNCHER_IDS = {"apartment", "monkey_island"};
-    static final String[] LAUNCHER_NAMES = {"Apartment", "Monkey Island"};
+    static final String[] LAUNCHER_IDS = {"apartment", "monkey_island", "vinyl"};
+    static final String[] LAUNCHER_NAMES = {"Apartment", "Monkey Island", "Vinyl"};
     private static final String DEFAULT_LAUNCHER = "apartment";
 
     private SharedPreferences settings;
@@ -42,7 +42,13 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         settings = getSharedPreferences("launcher", MODE_PRIVATE);
         launcher = settings.getString("launcher", DEFAULT_LAUNCHER);
-        theme = "monkey_island".equals(launcher) ? new MonkeyIslandTheme(this) : new ApartmentTheme(this);
+        if ("monkey_island".equals(launcher)) {
+            theme = new MonkeyIslandTheme(this);
+        } else if ("vinyl".equals(launcher)) {
+            theme = new VinylTheme(this);
+        } else {
+            theme = new ApartmentTheme(this);
+        }
         setContentView(theme.createView());
         theme.setApps(Apps.load(this));
 
