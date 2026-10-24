@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The apps in the inventory, in this order, shown with the name written here.
+         Format: "Name|package,package". An app matches if its package is listed or its
+         installed name matches (case, spaces and symbols ignored; "+" = "plus"). -->
+    <string-array name="visible_apps">
+        <item>YouTube|com.google.android.youtube.tv,com.google.android.youtube.googletv</item>
+        <item>Spotify|com.spotify.tv.android</item>
+        <item>Disney+|com.disney.disneyplus</item>
+        <item>Nebula|tv.standard.nebula</item>
+        <item>KinoPub|</item>
+    </string-array>
+</resources>

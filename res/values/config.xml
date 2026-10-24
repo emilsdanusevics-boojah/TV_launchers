@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- How often the background changes when the backgrounds folder holds several images. -->
+    <integer name="background_interval_minutes">5</integer>
+</resources>
