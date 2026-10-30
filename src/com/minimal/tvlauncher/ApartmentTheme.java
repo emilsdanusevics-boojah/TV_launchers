@@ -15,9 +15,6 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -29,11 +26,11 @@ import java.util.Locale;
 
 /**
  * A modern, minimal launcher: a 3D model of the apartment slowly turns in the middle of the
- * screen (three.js in a WebView, bundled in assets/apartment), surrounded by a live picture
- * of the sky over Riga: its colour by time of day, the sun from its real direction, clouds,
- * stars, rain, snow and fog, from Open-Meteo's current weather. The clock, today's weather,
- * the apps and a settings button are laid over it. Colours and type follow the original
- * Apartment page.
+ * screen (a pre-rendered video, so it's perfectly smooth; see {@link OrbitView}), surrounded
+ * by a live picture of the sky over Riga: its colour by time of day, the sun from its real
+ * direction, clouds, stars, rain, snow and fog, from Open-Meteo's current weather. The clock,
+ * today's weather, the apps and a settings button are laid over it. Colours and type follow
+ * the original Apartment page.
  */
 class ApartmentTheme implements LauncherTheme {
 
@@ -51,7 +48,7 @@ class ApartmentTheme implements LauncherTheme {
     private final Handler handler = new Handler();
     private Typeface light;
     private Typeface medium;
-    private WebView web;
+    private OrbitView orbit;
     private TextView time;
     private TextView date;
     private TextView weatherLine;
@@ -88,26 +85,11 @@ class ApartmentTheme implements LauncherTheme {
         FrameLayout root = new FrameLayout(activity);
         root.setBackgroundColor(SCENE);
 
-        // The 3D model. If the TV has no working WebView the plain background stays.
-        try {
-            web = new WebView(activity);
-            web.setFocusable(false);
-            web.setFocusableInTouchMode(false);
-            web.setBackgroundColor(SCENE);
-            WebSettings ws = web.getSettings();
-            ws.setJavaScriptEnabled(true);
-            ws.setAllowFileAccess(true);
-            web.setWebViewClient(new WebViewClient() {
-                @Override
-                public void onPageFinished(WebView view, String url) {
-                    pushWeather(Weather.cached());
-                }
-            });
-            web.loadUrl("file:///android_asset/apartment/index.html");
-            root.addView(web, new FrameLayout.LayoutParams(-1, -1));
-        } catch (Exception e) {
-            web = null;
-        }
+        // The turning flat and the sky.
+        orbit = new OrbitView(activity);
+        orbit.setFocusable(false);
+        orbit.setWeather(Weather.cached());
+        root.addView(orbit, new FrameLayout.LayoutParams(-1, -1));
 
         // Soft shades behind the text at the top and bottom.
         root.addView(shade(GradientDrawable.Orientation.TOP_BOTTOM, 0xB31D1E20),
@@ -241,10 +223,7 @@ class ApartmentTheme implements LauncherTheme {
     public void onResume() {
         handler.removeCallbacks(weatherTimer);
         weatherTimer.run();
-        if (web != null) {
-            web.onResume();
-            web.evaluateJavascript("window.launcherPause && launcherPause(false)", null);
-        }
+        orbit.onResume();
         if (menu.getVisibility() != View.VISIBLE && !gear.hasFocus()) {
             focusFirst();
         }
@@ -253,11 +232,8 @@ class ApartmentTheme implements LauncherTheme {
     @Override
     public void onPause() {
         handler.removeCallbacks(weatherTimer);
-        // Stop drawing the 3D model while an app is in front.
-        if (web != null) {
-            web.evaluateJavascript("window.launcherPause && launcherPause(true)", null);
-            web.onPause();
-        }
+        // Stop the video and drawing while an app is in front.
+        orbit.onPause();
     }
 
     @Override
@@ -287,11 +263,7 @@ class ApartmentTheme implements LauncherTheme {
     @Override
     public void onDestroy() {
         handler.removeCallbacks(weatherTimer);
-        if (web != null) {
-            ((ViewGroup) web.getParent()).removeView(web);
-            web.destroy();
-            web = null;
-        }
+        orbit.release();
     }
 
     // ---- Weather ----
@@ -301,7 +273,7 @@ class ApartmentTheme implements LauncherTheme {
             @Override
             public void onWeather(Weather.Now now) {
                 showWeather(now);
-                pushWeather(now);
+                orbit.setWeather(now);
             }
         });
     }
@@ -309,13 +281,6 @@ class ApartmentTheme implements LauncherTheme {
     private void showWeather(Weather.Now now) {
         weatherLine.setText(now == null ? "" : now.line());
         weatherLine.setVisibility(now == null ? View.GONE : View.VISIBLE);
-    }
-
-    // Hands the conditions to the 3D scene (rain, snow, clouds, fog, wind).
-    private void pushWeather(Weather.Now now) {
-        if (web != null && now != null) {
-            web.evaluateJavascript("window.setWeather && setWeather(" + now.json() + ")", null);
-        }
     }
 
     // ---- Settings menu ----

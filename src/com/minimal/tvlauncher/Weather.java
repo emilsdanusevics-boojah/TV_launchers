@@ -31,26 +31,14 @@ final class Weather {
             "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"};
 
     static class Now {
-        String code;        // the 3D scene's weather: clear, partly, overcast, rain, snow, ...
+        String code;        // the Apartment sky's weather: clear, partly, overcast, rain, snow, ...
         String summary;     // e.g. "Light rain"
         double tempC;
         double windKmh;
         String windFrom;    // compass point the wind comes from
-        String observedAt;  // local time, "2026-10-24T15:45"
         String[] sunrise = new String[0];
         String[] sunset = new String[0];
         long fetchedAt;
-
-        /** What the 3D scene's setWeather() takes. */
-        String json() {
-            try {
-                return new JSONObject().put("code", code).put("summary", summary)
-                        .put("tempC", tempC).put("windKmh", windKmh).put("windFrom", windFrom)
-                        .put("observedAt", observedAt).toString();
-            } catch (Exception e) {
-                return "{}";
-            }
-        }
 
         /** e.g. "11° · Mainly clear · Sunset 17:58". */
         String line() {
@@ -151,7 +139,6 @@ final class Weather {
             now.tempC = current.getDouble("temperature_2m");
             now.windKmh = current.getDouble("wind_speed_10m");
             now.windFrom = COMPASS[(int) Math.round(current.getDouble("wind_direction_10m") / 22.5) % 16];
-            now.observedAt = current.optString("time");
             JSONObject daily = root.optJSONObject("daily");
             if (daily != null) {
                 now.sunrise = strings(daily.optJSONArray("sunrise"));

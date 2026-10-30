@@ -1,9 +1,9 @@
 # Copies the 3D apartment model from an "Apartment" page (the three.js HTML file) into
 # web/apartment.js, replacing what's between the MODEL START / MODEL END markers. Everything
-# outside the markers (weather, sky backdrop, camera, performance tuning) is kept.
+# outside the markers (lighting by time of day, camera, video frames) is kept.
 #
-# The page's own controls go: orbit controls, its colour-theme background, and its render
-# settings, which are swapped for ones that suit a TV.
+# The page's own controls go: orbit controls and its colour-theme background; the renderer
+# draws on a transparent background, for the launcher's video.
 #
 # Usage: python3 web/import_model.py <Apartment.html>   then   web/build.sh
 import re
@@ -34,18 +34,13 @@ def adapt(model):
     model = model.replace('"three/addons/', '"three/examples/jsm/')
     model = must_sub(r'(import \{ RoomEnvironment \}[^\n]*\n)',
                      r'\1import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";\n', model)
-    model = must_sub(r'const renderer = new THREE\.WebGLRenderer\(\{[^}]*\}\);\nrenderer\.setPixelRatio\([^\n]*\);',
-                     "const renderer = new THREE.WebGLRenderer({ antialias: true });\n"
-                     "// Render resolution, as a width in pixels. It starts a little under 1080p and is adjusted\n"
-                     "// while running so the TV keeps up with every screen refresh (see \"smooth motion\").\n"
-                     "const MIN_WIDTH = 960, MAX_WIDTH = 1920;\n"
-                     "let renderWidth = 1600;\n"
-                     "renderer.setPixelRatio(renderWidth / innerWidth);", model)
-    model = must_sub(r'THREE\.PCFSoftShadowMap;',
-                     "THREE.PCFShadowMap;   // the original's PCFSoft costs far more per pixel", model)
-    # The page's light/dark background follows its colour theme; the sky backdrop replaces it.
+    model = must_sub(r'const renderer = new THREE\.WebGLRenderer\(\{[^}]*\}\);\nrenderer\.setPixelRatio\([^\n]*\);\nrenderer\.setSize\([^\n]*\);\n',
+                     "const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });\n"
+                     "renderer.setPixelRatio(1);   // render size is set per video by renderSetup()\n"
+                     "renderer.setClearColor(0x000000, 0);\n", model)
+    # The page's light/dark background follows its colour theme; the app draws the sky instead.
     model = must_sub(r'function syncBg\(\) \{.*?attributeFilter: \["data-theme"\] \}\);\n',
-                     "scene.background = null;   // the sky backdrop (below) fills the background\n",
+                     "scene.background = null;   // transparent: the app draws the sky\n",
                      model, flags=re.S)
     model = must_sub(r'const controls = new OrbitControls\([^\n]*\n', "", model)
     model = re.sub(r'controls\.[^\n]*\n', "", model)

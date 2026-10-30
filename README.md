@@ -10,9 +10,9 @@ A modern, minimal launcher. A 3D model of the apartment slowly turns in the midd
 - **The sun** glows from its real direction, so the glow travels around the edge of the screen as the view turns.
 - **Clouds** cover as much of the sky as they really do, and drift with the real wind.
 - **Stars** come out on clear nights.
-- **Rain, snow, fog and lightning** fill the whole background when they're happening.
+- **Rain, snow, fog and lightning** fill the whole picture when they're happening.
 
-The flat itself is lit by the real sun, so its shadows move through the day and its lamps glow after dark. Rain and snow also fall around the building, and the terrace looks wet after rain.
+The flat is shown in daylight by day and with its lamps glowing after dark, switching at the real sunset and sunrise. Under heavy cloud it looks a little duller, and around sunrise and sunset a little warmer.
 
 On top of it:
 
@@ -21,7 +21,9 @@ On top of it:
 - your apps as a row of names along the bottom
 - a settings button (gear) at the bottom right
 
-The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`. The weather, sky and camera code in `web/apartment.js` are kept. The scene runs in a WebView from files inside the app, and it pauses while another app is open. To keep the motion smooth on a TV's small graphics chip, it uses lighter versions of some of three.js's lighting and shadow shaders, draws the sky only where the flat doesn't cover it, and lowers the render resolution if frames start arriving late. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
+The turning flat is a pre-rendered video, so the motion is perfectly smooth: the TV's video decoder plays it, with each frame shown for exactly two screen refreshes, and the loop has no seam. There are two videos in `assets/apartment`, day and night, each one full turn at 30 frames per second. Each frame holds the flat's colour on the left and its outline (transparency) on the right, so the app can lay it over the live sky, which it draws itself with one small shader. Everything pauses while another app is open.
+
+The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`, which renders both videos again in a headless browser (about an hour each; needs Node.js and ffmpeg). The lighting and camera code in `web/apartment.js` are kept. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
 
 - **Left/Right** moves along the apps. **OK** opens one; **long-press OK** opens its info page.
 - **Gear** (or **Menu** on the remote) opens a menu:
@@ -164,7 +166,7 @@ sudo apt install aapt dalvik-exchange apksigner zipalign android-sdk-platform-23
 python3 make_icons.py res/drawable-xhdpi   # only needed if you change the icons
 python3 make_background.py res/drawable-nodpi/bg_default.png   # built-in background art
 python3 make_verb_font.py src/com/minimal/tvlauncher/VerbFont.java   # verb font
-web/build.sh                               # 3D apartment -> assets/apartment/apartment.js (needs Node.js)
+web/build.sh                               # 3D apartment -> assets/apartment/orbit_day.mp4, orbit_night.mp4 (needs Node.js, ffmpeg)
 ./build.sh                                 # -> MinimalTVLauncher.apk
 ```
 
