@@ -23,7 +23,7 @@ const GOP = 5 * FPS;                           // a keyframe every 5 seconds
 const WORKERS = Math.max(1, Math.min(4, os.cpus().length));
 const LIGHTING = {
   day: { when: "2026-06-21T10:00:00Z", code: "partly" },     // early afternoon, a few clouds
-  night: { when: "2026-10-24T20:30:00Z", code: "clear" },    // late evening, lamps on
+  night: { when: "2026-10-24T20:30:00Z", code: "clear", cozy: true },   // evening, the orange lamps glowing
 };
 
 const [, , pageDir, variant, outFile, framesArg] = process.argv;

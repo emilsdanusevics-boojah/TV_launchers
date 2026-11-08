@@ -1321,11 +1321,38 @@ const RADIUS = 12.2, HEIGHT = 21.2, FOV = 42;
 const VIEW = { w: 1.04, h: 1.04 * 880 / 960 };   // matches the video's 960×880 picture
 
 /** Lighting for one video: when (ISO time, sets the sun) and weather code, and frame size. */
-window.renderSetup = ({ when, code, width, height, view }) => {
+// The evening look: the flat's orange lamps glow brightly and light their corners, the
+// ceiling lights are dimmed to a warm low light, and the moonlight outside stays cool.
+function makeCozy() {
+  for (const light of lightsGroup.children) {
+    if (light.color.getHex() === 0xff6a2a) {          // the orange lamps
+      light.color.set(0xff8a3d);                       // a little more amber than red
+      light.intensity *= 3.2;
+      light.distance *= 1.9;
+      light.castShadow = true;                         // so walls keep the glow inside
+      light.shadow.mapSize.set(1024, 1024);
+      light.shadow.bias = -0.002;
+      light.shadow.camera.near = 0.05;
+    } else {                                           // ceiling lights
+      light.intensity *= 0.3;
+      light.color.set(0xffc489);
+    }
+  }
+  M.orangeGlow.emissiveIntensity = 2.0;
+  hemi.intensity = 0.22;
+  moon.intensity = 0.18;
+  renderer.toneMappingExposure = 0.95;
+}
+
+window.renderSetup = ({ when, code, width, height, view, cozy }) => {
   if (view) Object.assign(VIEW, view);   // for measuring
   window.launcherNow = when;
   weather = { ...weather, code };
   applyAtmosphere();
+  if (cozy) makeCozy();
+  // Nothing moves but the camera, so the shadows are drawn once.
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
   renderer.setSize(width, height, false);
   // The screen's camera, cropped to VIEW around its centre.
   camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(FOV / 2)) * VIEW.h));

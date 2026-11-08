@@ -1,5 +1,6 @@
 package com.minimal.tvlauncher;
 
+import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -7,6 +8,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.os.Handler;
 import android.text.SpannableString;
+import android.text.TextUtils;
 import android.text.Spanned;
 import android.text.format.DateFormat;
 import android.text.style.RelativeSizeSpan;
@@ -18,6 +20,7 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.util.Date;
@@ -30,7 +33,11 @@ import java.util.Locale;
  * by a live picture of the sky over Riga: its colour by time of day, the sun from its real
  * direction, clouds, stars, rain, snow and fog, from Open-Meteo's current weather. The clock,
  * today's weather, the apps and a settings button are laid over it. Colours and type follow
- * the original Apartment page.
+ * the original Apartment page. In the evening the flat is lit by its own orange lamps.
+ *
+ * On Latvia's red days the picture gets that holiday's decoration, a greeting appears under
+ * the weather and the buttons take the holiday's colour (Settings → Holidays turns this off,
+ * and shows any of the days as a preview).
  */
 class ApartmentTheme implements LauncherTheme {
 
@@ -46,6 +53,13 @@ class ApartmentTheme implements LauncherTheme {
 
     private final MainActivity activity;
     private final Handler handler = new Handler();
+    private SharedPreferences prefs;
+    private int accent = ACCENT;
+    private int ink = ACCENT_INK;
+    private List<Apps.Entry> apps;
+    private TextView holidayLine;
+    private Holidays.Day preview;    // a holiday shown from the menu, until Back or Home
+    private String shownHoliday = "";
     private Typeface light;
     private Typeface medium;
     private OrbitView orbit;
@@ -79,6 +93,7 @@ class ApartmentTheme implements LauncherTheme {
 
     @Override
     public View createView() {
+        prefs = activity.getSharedPreferences("launcher", MainActivity.MODE_PRIVATE);
         light = Typeface.createFromAsset(activity.getAssets(), "fonts/HankenGrotesk-300.ttf");
         medium = Typeface.createFromAsset(activity.getAssets(), "fonts/HankenGrotesk-500.ttf");
 
@@ -118,8 +133,14 @@ class ApartmentTheme implements LauncherTheme {
         weatherParams.leftMargin = dp(4);
         clock.addView(weatherLine, weatherParams);
         showWeather(Weather.cached());
+        holidayLine = text(medium, 16, ACCENT);
+        holidayLine.setVisibility(View.GONE);
+        LinearLayout.LayoutParams holidayParams = new LinearLayout.LayoutParams(-2, -2);
+        holidayParams.topMargin = dp(6);
+        holidayParams.leftMargin = dp(4);
+        clock.addView(holidayLine, holidayParams);
         // A soft shadow keeps the text readable over bright sky and window frames.
-        for (TextView t : new TextView[] {time, date, weatherLine}) {
+        for (TextView t : new TextView[] {time, date, weatherLine, holidayLine}) {
             t.setShadowLayer(dp(6), 0, dp(1), 0x99000000);
         }
         FrameLayout.LayoutParams clockParams = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
@@ -136,8 +157,8 @@ class ApartmentTheme implements LauncherTheme {
         bar.addView(appRow, new LinearLayout.LayoutParams(0, -2, 1));
         gear = new ImageView(activity);
         gear.setImageResource(R.drawable.ic_gear);
-        gear.setImageTintList(focusColors(ACCENT_INK, MUTED));
-        gear.setBackground(pill(ACCENT, 0));
+        gear.setImageTintList(focusColors(ink, MUTED));
+        gear.setBackground(pill(accent, 0));
         gear.setPadding(dp(11), dp(11), dp(11), dp(11));
         gear.setFocusable(true);
         gear.setContentDescription("Settings");
@@ -167,13 +188,17 @@ class ApartmentTheme implements LauncherTheme {
         menu.addView(menuTitle);
         menuItems = new LinearLayout(activity);
         menuItems.setOrientation(LinearLayout.VERTICAL);
-        menu.addView(menuItems);
+        // Long menus (the holidays) scroll; the remote's focus moves the list along.
+        ScrollView scroll = new ScrollView(activity);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.addView(menuItems);
+        menu.addView(scroll, new LinearLayout.LayoutParams(-1, -2, 1));
         menuFooter = text(medium, 12, MUTED);
         menuFooter.setPadding(dp(14), dp(10), dp(14), dp(4));
         menu.addView(menuFooter);
         menu.setVisibility(View.GONE);
-        FrameLayout.LayoutParams menuParams = new FrameLayout.LayoutParams(dp(280), -2, Gravity.BOTTOM | Gravity.END);
-        menuParams.setMargins(0, 0, dp(44), dp(100));
+        FrameLayout.LayoutParams menuParams = new FrameLayout.LayoutParams(dp(300), -2, Gravity.BOTTOM | Gravity.END);
+        menuParams.setMargins(0, dp(24), dp(44), dp(100));
         root.addView(menu, menuParams);
 
         return root;
@@ -181,12 +206,13 @@ class ApartmentTheme implements LauncherTheme {
 
     @Override
     public void setApps(List<Apps.Entry> apps) {
+        this.apps = apps;
         appRow.removeAllViews();
         for (final Apps.Entry app : apps) {
             TextView item = text(medium, 18, 0);
             item.setText(app.label);
-            item.setTextColor(focusColors(ACCENT_INK, FG));
-            item.setBackground(pill(ACCENT, 0));
+            item.setTextColor(focusColors(ink, FG));
+            item.setBackground(pill(accent, 0));
             item.setPadding(dp(20), dp(10), dp(20), dp(11));
             item.setFocusable(true);
             item.setOnClickListener(new View.OnClickListener() {
@@ -217,12 +243,14 @@ class ApartmentTheme implements LauncherTheme {
         String fmt = DateFormat.is24HourFormat(activity) ? "HH:mm" : "h:mm";
         time.setText(DateFormat.format(fmt, now));
         date.setText(DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEdMMMM"), now));
+        showHoliday();   // a new day may be a red day
     }
 
     @Override
     public void onResume() {
         handler.removeCallbacks(weatherTimer);
         weatherTimer.run();
+        showHoliday();
         orbit.onResume();
         if (menu.getVisibility() != View.VISIBLE && !gear.hasFocus()) {
             focusFirst();
@@ -239,6 +267,7 @@ class ApartmentTheme implements LauncherTheme {
     @Override
     public void onHome() {
         closeMenu();
+        stopPreview();
         focusFirst();
     }
 
@@ -255,6 +284,10 @@ class ApartmentTheme implements LauncherTheme {
     public boolean onBack() {
         if (menu.getVisibility() == View.VISIBLE) {
             closeMenu();
+            return true;
+        }
+        if (preview != null) {
+            stopPreview();
             return true;
         }
         return false;
@@ -301,6 +334,12 @@ class ApartmentTheme implements LauncherTheme {
                 activity.editApps();
             }
         });
+        addMenuItem("Holidays", new Runnable() {
+            @Override
+            public void run() {
+                showHolidaysMenu();
+            }
+        });
         addMenuItem("Change launcher", new Runnable() {
             @Override
             public void run() {
@@ -342,6 +381,82 @@ class ApartmentTheme implements LauncherTheme {
         (current != null ? current : menuItems.getChildAt(0)).requestFocus();
     }
 
+    // Holidays: whether red days get their decoration, and a preview of each one.
+    private void showHolidaysMenu() {
+        openMenu("Holidays");
+        final boolean on = holidaysOn();
+        addMenuItem(small("On red days", on ? "on" : "off"), new Runnable() {
+            @Override
+            public void run() {
+                prefs.edit().putBoolean("holidays", !on).apply();
+                showHoliday();
+                showHolidaysMenu();
+            }
+        });
+        for (final Holidays.Day day : Holidays.year(java.util.Calendar.getInstance().get(java.util.Calendar.YEAR))) {
+            addMenuItem(small(day.name, day.date()), new Runnable() {
+                @Override
+                public void run() {
+                    closeMenu();
+                    preview = day;
+                    showHoliday();
+                }
+            });
+        }
+        menuFooter.setText("Pick a day to see it. Back ends the preview.");
+        menuFooter.setVisibility(View.VISIBLE);
+        menuItems.getChildAt(0).requestFocus();
+    }
+
+    private boolean holidaysOn() {
+        return prefs.getBoolean("holidays", true);
+    }
+
+    private void stopPreview() {
+        if (preview != null) {
+            preview = null;
+            showHoliday();
+        }
+    }
+
+    // The holiday to show (a preview, or today's red day), in the picture, the greeting and
+    // the buttons' colour.
+    private void showHoliday() {
+        Holidays.Day day = preview != null ? preview : holidaysOn() ? Holidays.today() : null;
+        String key = day == null ? "" : day.id + (preview != null ? ":preview" : "");
+        if (key.equals(shownHoliday)) {
+            return;
+        }
+        shownHoliday = key;
+        orbit.setHoliday(day);
+        if (day == null) {
+            holidayLine.setVisibility(View.GONE);
+        } else {
+            holidayLine.setText(preview != null ? day.greeting + "  ·  preview" : day.greeting);
+            holidayLine.setTextColor(day.accent);
+            holidayLine.setVisibility(View.VISIBLE);
+        }
+        accent = day != null ? day.accent : ACCENT;
+        ink = day != null ? day.ink : ACCENT_INK;
+        gear.setImageTintList(focusColors(ink, MUTED));
+        gear.setBackground(pill(accent, 0));
+        if (apps != null) {
+            boolean focused = appRow.hasFocus();
+            int index = focused ? appRow.indexOfChild(appRow.getFocusedChild()) : -1;
+            setApps(apps);
+            if (index >= 0 && index < appRow.getChildCount()) {
+                appRow.getChildAt(index).requestFocus();
+            }
+        }
+    }
+
+    // A menu label with a smaller, quieter note after it.
+    private static CharSequence small(String label, String note) {
+        SpannableString s = new SpannableString(label + "   " + note);
+        s.setSpan(new RelativeSizeSpan(0.72f), label.length(), s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return s;
+    }
+
     private void openMenu(String title) {
         menuTitle.setText(title);
         menuItems.removeAllViews();
@@ -364,8 +479,9 @@ class ApartmentTheme implements LauncherTheme {
     private View addMenuItem(CharSequence label, final Runnable action) {
         TextView item = text(medium, 17, 0);
         item.setText(label);
-        item.setTextColor(focusColors(ACCENT_INK, FG));
-        item.setBackground(pill(ACCENT, dp(8)));
+        item.setEllipsize(TextUtils.TruncateAt.END);
+        item.setTextColor(focusColors(ink, FG));
+        item.setBackground(pill(accent, dp(8)));
         item.setPadding(dp(14), dp(11), dp(14), dp(12));
         item.setFocusable(true);
         item.setOnClickListener(new View.OnClickListener() {

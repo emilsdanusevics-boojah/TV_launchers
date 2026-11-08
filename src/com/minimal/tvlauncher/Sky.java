@@ -96,9 +96,9 @@ final class Sky {
         return s;
     }
 
-    /** Night: the video of the flat with its lamps on. */
-    boolean night() {
-        return day < 0.5f;
+    /** From just before sunset until sunrise: the evening video, with the flat's lamps glowing. */
+    boolean lampsOn() {
+        return sunAlt < 0.05f;
     }
 
     private static float smoothstep(float a, float b, float x) {

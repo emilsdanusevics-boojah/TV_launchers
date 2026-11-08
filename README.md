@@ -6,13 +6,35 @@ A home screen for Android TV / Xiaomi TV with three looks. You can switch betwee
 
 A modern, minimal launcher. A 3D model of the apartment slowly turns in the middle of the screen, one full turn every 2½ minutes. All the space around it is a live picture of the sky over Brīvības iela 95, Riga:
 
-- **Sky colour** follows the real time of day and the cloud cover: blue by day, grey when overcast, orange and pink around the real sunrise and sunset, deep navy at night.
+- **Sky colour** follows the real time of day and the cloud cover: blue by day, grey when overcast, orange and pink around the real sunrise and sunset, deep navy at night with the city's warm glow along the bottom.
 - **The sun** glows from its real direction, so the glow travels around the edge of the screen as the view turns.
 - **Clouds** cover as much of the sky as they really do, and drift with the real wind.
 - **Stars** come out on clear nights.
 - **Rain, snow, fog and lightning** fill the whole picture when they're happening.
 
-The flat is shown in daylight by day and with its lamps glowing after dark, switching at the real sunset and sunrise. Under heavy cloud it looks a little duller, and around sunrise and sunset a little warmer.
+The flat is shown in daylight by day. From just before sunset until sunrise it switches to a cozy evening look: the ceiling lights are dimmed low and the flat's three orange lamps light their corners in amber, with a soft, gently flickering glow around each one. Under heavy cloud the daytime flat looks a little duller, and around sunrise and sunset a little warmer.
+
+### Holidays
+
+On Latvia's public holidays (the red days in the calendar) the picture gets a decoration for the day, a greeting appears under the weather, and the buttons take the holiday's colour:
+
+| Day | Date | Decoration |
+|---|---|---|
+| Jaungada diena (New Year's Day) | 1 Jan | fireworks |
+| Lielā Piektdiena (Good Friday) | 2 days before Easter | pussy-willow catkins |
+| Lieldienas, Otrās Lieldienas (Easter Sunday and Monday) | Easter | onion-skin dyed eggs floating up |
+| Darba svētki (Labour Day; Convocation of the Constituent Assembly) | 1 May | apple blossom petals |
+| Neatkarības atjaunošanas diena (Restoration of Independence) | 4 May | the Latvian flag |
+| Mātes diena (Mother's Day) | 2nd Sunday of May | tulip petals |
+| Vasarsvētki (Pentecost) | 7 weeks after Easter | young birch leaves |
+| Līgo diena, Jāņu diena (Midsummer) | 23 and 24 Jun | a bonfire's glow and rising embers |
+| Proklamēšanas diena (Proclamation Day) | 18 Nov | the flag and a row of candles |
+| Ziemassvētku vakars, Pirmie and Otrie Ziemassvētki (Christmas) | 24–26 Dec | strings of lights and snow |
+| Vecgada diena (New Year's Eve) | 31 Dec | fireworks |
+
+When 4 May or 18 November falls on a weekend, the Monday after (a day off) gets the decoration too. One-off holidays the government adds in some years aren't included.
+
+**Settings → Holidays** turns the decorations on or off, and lists every red day of this year with its date: pick one to preview it, and press **Back** (or Home) to end the preview.
 
 On top of it:
 
@@ -21,7 +43,7 @@ On top of it:
 - your apps as a row of names along the bottom
 - a settings button (gear) at the bottom right
 
-The turning flat is a pre-rendered video, so the motion is perfectly smooth: the TV's video decoder plays it, with each frame shown for exactly two screen refreshes, and the loop has no seam. There are two videos in `assets/apartment`, day and night, each one full turn at 30 frames per second. Each frame holds the flat's colour on the left and its outline (transparency) on the right, so the app can lay it over the live sky, which it draws itself with one small shader. Everything pauses while another app is open.
+The turning flat is a pre-rendered video, so the motion is perfectly smooth: the TV's video decoder plays it, with each frame shown for exactly two screen refreshes, and the loop has no seam. There are two videos in `assets/apartment`, day and evening, each one full turn at 30 frames per second. Each frame holds the flat's colour on the left and its outline (transparency) on the right, so the app can lay it over the live sky, which it draws itself with one small shader. Everything pauses while another app is open.
 
 The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`, which renders both videos again in a headless browser (about an hour each; needs Node.js and ffmpeg). The lighting and camera code in `web/apartment.js` are kept. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
 
@@ -29,6 +51,7 @@ The model comes from the apartment page (three.js). To update it from a new vers
 - **Gear** (or **Menu** on the remote) opens a menu:
   - **TV settings**
   - **Edit apps**
+  - **Holidays**, see above
   - **Change launcher**, where you can pick Apartment, Monkey Island or Vinyl
 - **Back** closes the menu.
 

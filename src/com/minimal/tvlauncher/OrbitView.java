@@ -22,27 +22,39 @@ import javax.microedition.khronos.opengles.GL10;
  *
  * The flat is a pre-rendered video (assets/apartment, made by web/render_video.js): one full
  * turn, looped, with the flat's colour in the left half of each frame and its transparency in
- * the right half. One for daytime and one for night, with the lamps on. The TV's video
- * decoder plays it ({@link VideoLoop}), so the motion costs almost nothing, and one shader
- * draws the sky around it (time of day, the sun from its real direction, clouds drifting
- * with the wind, stars, fog), then the flat, then rain, snow and lightning in front.
- * The clouds and stars turn with the flat, as if the camera were going round.
+ * the right half. One for daytime and one for the evening, lit by its orange lamps. The TV's
+ * video decoder plays it ({@link VideoLoop}), so the motion costs almost nothing, and one
+ * shader draws the sky around it (time of day, the sun from its real direction, clouds
+ * drifting with the wind, stars, fog, the city's warm glow at night), then the flat, with a
+ * soft flickering glow around its lamps in the evening, then rain, snow and lightning in
+ * front. The clouds and stars turn with the flat, as if the camera were going round.
+ *
+ * On Latvia's red days it also draws that holiday's decoration ({@link Holidays}).
  */
 final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, SurfaceTexture.OnFrameAvailableListener {
 
     private static final String TAG = "OrbitView";
     private static final String DAY = "apartment/orbit_day.mp4";
-    private static final String NIGHT = "apartment/orbit_night.mp4";
+    private static final String EVENING = "apartment/orbit_night.mp4";
     // How the video was rendered (see web/render_video.js and web/apartment.js).
     private static final double ANGLE0 = 0.6;              // the camera's angle at the first frame
     private static final long FALLBACK_TURN_US = 150000000L;
     private static final float TILE_W = 1.04f;             // the video's picture, in screen heights
     private static final float TILE_H = 1.04f * 880 / 960;
     private static final float CENTRE_X = 0.56f, CENTRE_Y = 0.56f;   // nudged up and right, between the clock and the apps
+    // The video's camera, to find where the lamps are on screen: it circles TARGET at
+    // RADIUS, HEIGHT metres up, with a 42° tall view of the whole screen.
+    private static final double TARGET_X = 4.34, TARGET_Z = 2.6, RADIUS = 12.2, HEIGHT = 21.2;
+    private static final double TAN_HALF_FOV = Math.tan(Math.toRadians(21));
+    // The flat's three orange lamps (x, height, z in metres, from web/apartment.js).
+    private static final double[][] LAMPS = {{1.66, 1.0, 0.36}, {3.9, 1.28, 0.25}, {4.2, 0.8, 3.15}};
 
     private final long vsyncUs;
     private volatile Weather.Now weather;
     private volatile boolean weatherChanged = true;
+    private volatile int holiday = Holidays.NONE;
+    private volatile float[] holidayColors = new float[9];
+    private final float[] lamps = new float[9];
 
     // Video. The loop is shared with the main thread (which stops it on pause), so it's guarded.
     private final Object videoLock = new Object();
@@ -84,6 +96,14 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
             weather = now;
             weatherChanged = true;
         }
+    }
+
+    /** Today's holiday decoration, or null for none. */
+    void setHoliday(Holidays.Day day) {
+        if (day != null) {
+            holidayColors = day.palette;
+        }
+        holiday = day != null ? day.effect : Holidays.NONE;
     }
 
     @Override
@@ -200,9 +220,9 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
 
         long turnUs = FALLBACK_TURN_US;
         synchronized (videoLock) {
-            String want = sky.night() ? NIGHT : DAY;
+            String want = sky.lampsOn() ? EVENING : DAY;
             if (loop != null && !want.equals(loopPath)) {
-                stopVideo();   // day turned to night or back: carry on with the other video
+                stopVideo();   // evening came or went: carry on with the other video
             }
             if (loop != null && !loop.alive()) {
                 stopVideo();
@@ -278,7 +298,8 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
         GLES20.glUniform1f(u("uDay"), s.day);
         GLES20.glUniform1f(u("uCloud"), s.cloud);
         GLES20.glUniform1f(u("uRain"), s.rain);
-        GLES20.glUniform1f(u("uSnow"), s.snow);
+        int fx = holiday;
+        GLES20.glUniform1f(u("uSnow"), fx == Holidays.CHRISTMAS ? Math.max(s.snow, 0.35f) : s.snow);
         GLES20.glUniform1f(u("uFog"), s.fog);
         GLES20.glUniform1f(u("uStars"), (1 - s.day) * (1 - s.cloud) * 0.9f);
         GLES20.glUniform1f(u("uFlash"), flash > 0 && s.thunder > 0 ? 0.6f : 0);
@@ -296,11 +317,49 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
 
         // The flat in the daytime video was lit by a partly cloudy sun: duller under heavy
         // cloud, warmer around sunrise and sunset.
-        float dull = s.night() ? 1 : 1 - 0.15f * Math.max(0, s.cloud - 0.4f) / 0.6f;
-        float warm = s.night() ? 0 : s.dusk * 0.6f;
+        boolean evening = s.lampsOn();
+        float dull = evening ? 1 : 1 - 0.15f * Math.max(0, s.cloud - 0.4f) / 0.6f;
+        float warm = evening ? 0 : s.dusk * 0.6f;
         GLES20.glUniform3f(u("uTint"), dull, dull * (1 - 0.12f * warm), dull * (1 - 0.22f * warm));
 
+        // The lamps' soft glow in the evening, and the city's warm light low in the night sky.
+        placeLamps(angle, tw, th);
+        GLES20.glUniform3fv(u("uLamps"), 3, lamps, 0);
+        GLES20.glUniform1f(u("uLampGlow"), evening && hasFrame ? 1 : 0);
+        GLES20.glUniform1f(u("uCity"), 1 - s.day);
+
+        float[] hc = holidayColors;
+        GLES20.glUniform1f(u("uHoliday"), fx);
+        GLES20.glUniform3f(u("uHolA"), hc[0], hc[1], hc[2]);
+        GLES20.glUniform3f(u("uHolB"), hc[3], hc[4], hc[5]);
+        GLES20.glUniform3f(u("uHolC"), hc[6], hc[7], hc[8]);
+
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+    }
+
+    // Where each lamp is on screen (x, y as fractions of it, and 1 if in front of the
+    // camera), seen from the video's camera at this angle.
+    private void placeLamps(double angle, float tw, float th) {
+        double cx = TARGET_X + Math.sin(angle) * RADIUS, cy = HEIGHT, cz = TARGET_Z + Math.cos(angle) * RADIUS;
+        double fx = TARGET_X - cx, fy = -cy, fz = TARGET_Z - cz;
+        double fl = Math.sqrt(fx * fx + fy * fy + fz * fz);
+        fx /= fl;
+        fy /= fl;
+        fz /= fl;
+        double rx = -fz, rz = fx;                          // right = forward × up
+        double rl = Math.sqrt(rx * rx + rz * rz);
+        rx /= rl;
+        rz /= rl;
+        double ux = -rz * fy, uy = rz * fx - rx * fz, uz = rx * fy;   // up = right × forward
+        for (int i = 0; i < 3; i++) {
+            double dx = LAMPS[i][0] - cx, dy = LAMPS[i][1] - cy, dz = LAMPS[i][2] - cz;
+            double x = dx * rx + dz * rz, y = dx * ux + dy * uy + dz * uz, z = dx * fx + dy * fy + dz * fz;
+            double tileX = 0.5 + 0.5 * x / (z * TAN_HALF_FOV * TILE_W);
+            double tileY = 0.5 + 0.5 * y / (z * TAN_HALF_FOV * TILE_H);
+            lamps[i * 3] = (float) (CENTRE_X - tw / 2 + tileX * tw);
+            lamps[i * 3 + 1] = (float) (CENTRE_Y - th / 2 + tileY * th);
+            lamps[i * 3 + 2] = z > 0 ? 1 : 0;
+        }
     }
 
     private int u(String name) {
@@ -388,9 +447,27 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
             + "uniform vec3 uTop, uHorizon, uSunColor, uTint;\n"
             + "uniform vec2 uSun, uWind;\n"
             + "uniform float uHasVideo, uSunVis, uDusk, uDay, uCloud, uRain, uSnow, uFog, uFlash, uTime, uAngle, uAspect, uStars;\n"
+            + "uniform float uLampGlow, uCity, uHoliday;\n"
+            + "uniform vec3 uLamps[3];\n"
+            + "uniform vec3 uHolA, uHolB, uHolC;\n"
             + "varying vec2 vUv;\n"
             + "float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n"
             + "vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(0.41666)) - 0.055, step(0.0031308, c)); }\n"
+            + "bool fx(float id) { return abs(uHoliday - id) < 0.5; }\n"
+            + "vec3 pick(float k) { return k < 0.333 ? uHolA : (k < 0.667 ? uHolB : uHolC); }\n"
+            // Holiday things drifting down (speed > 0) or up (speed < 0), at most one per grid cell,
+            // swaying together in the breeze and turning: xy = the pixel in the thing's own frame
+            // (outline at length 1), z = which of the three colours (0-1). Far away (9) if none.
+            + "vec3 drifter(vec2 p, float scale, float speed, float density, vec2 size, float spin, float seed) {\n"
+            + "  vec2 g = p * scale + vec2(sin(uTime * 0.4 + seed) * 0.6, uTime * speed);\n"
+            + "  vec2 cell = floor(g);\n"
+            + "  float h = hash(cell + seed);\n"
+            + "  if (h > density) return vec3(9.0, 9.0, 0.0);\n"
+            + "  vec2 f = fract(g) - 0.5 - (vec2(hash(cell + seed + 3.1), hash(cell + seed + 5.7)) - 0.5) * 0.5;\n"
+            + "  float a = h * 40.0 + uTime * spin * (h / density - 0.5) * 2.0;\n"
+            + "  float ca = cos(a), sa = sin(a);\n"
+            + "  return vec3(mat2(ca, -sa, sa, ca) * f / size, h / density);\n"
+            + "}\n"
             + "void main() {\n"
             + "  vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0);\n"
             // Sky: zenith colour at the top of the screen, the horizon's towards the bottom.
@@ -418,7 +495,46 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
             + "  col = mix(col, cloudCol, cover * (0.5 + 0.45 * uCloud));\n"
             // Fog: everything fades into the haze.
             + "  col = mix(col, uHorizon, uFog * 0.6);\n"
+            // At night the city's warm light along the horizon.
+            + "  col += vec3(0.045, 0.02, 0.007) * uCity * smoothstep(0.6, 0.0, vUv.y);\n"
             + "  col = toSRGB(max(col * 0.9, 0.0));\n"   // a touch calmer, so the clock and apps stand out
+            // Holiday decorations behind the flat. New Year: fireworks.
+            + "  if (fx(1.0)) {\n"
+            + "    float bright = 1.0 - 0.45 * uDay;\n"
+            + "    for (int i = 0; i < 4; i++) {\n"
+            + "      float fi = float(i);\n"
+            + "      float t = uTime / (2.6 + fi * 0.55) + fi * 0.31;\n"
+            + "      float n = floor(t), ft = fract(t);\n"
+            + "      vec2 c = vec2((hash(vec2(n, fi)) - 0.5) * uAspect * 0.85, 0.1 + 0.28 * hash(vec2(fi, n + 7.0)));\n"
+            + "      c.y -= ft * ft * 0.05;\n"
+            + "      vec2 dv = p - c;\n"
+            + "      float r = length(dv);\n"
+            + "      float ray = abs(fract(atan(dv.y, dv.x) / 6.2832 * 28.0 + hash(vec2(n, fi + 3.0))) - 0.5);\n"
+            + "      float R = 0.2 * (1.0 - (1.0 - ft) * (1.0 - ft) * (1.0 - ft));\n"
+            + "      float spark = smoothstep(0.2, 0.0, ray) * smoothstep(0.026, 0.0, abs(r - R));\n"
+            + "      float trail = smoothstep(0.1, 0.0, ray) * smoothstep(0.0, R, r) * step(r, R) * 0.5;\n"
+            + "      float fade = (1.0 - ft) * (1.0 - ft) * (0.75 + 0.25 * sin(uTime * 25.0 + r * 80.0));\n"
+            + "      col += pick(fract(n * 0.37 + fi * 0.29)) * ((spark + trail) * fade * 2.2 + exp(-r * r * 30.0) * fade * 0.25) * bright;\n"
+            + "    }\n"
+            + "  }\n"
+            // 4 May and 18 November: the flag (carmine, white, carmine) waving at the top right.
+            + "  if (fx(5.0) || fx(9.0)) {\n"
+            + "    float fw = 0.15, fh = fw * uAspect * 0.5, x0 = 0.8, top = 0.93;\n"
+            + "    float u = (vUv.x - x0) / fw;\n"
+            + "    float wave = u * 7.0 - uTime * 2.4;\n"
+            + "    float v = (vUv.y - (top - fh) - sin(wave) * 0.012 * u) / fh;\n"
+            + "    float lit = mix(0.55, 1.0, uDay);\n"
+            + "    if (u > 0.0 && u < 1.0 && v > 0.0 && v < 1.0) {\n"
+            + "      col = ((v > 0.4 && v < 0.6) ? uHolB : uHolA) * (0.92 + 0.12 * cos(wave) * u) * lit;\n"
+            + "    }\n"
+            + "    float pole = step(abs(vUv.x - x0 + 0.002) * uAspect, 0.003) * step(top - 0.32, vUv.y) * step(vUv.y, top + 0.012);\n"
+            + "    col = mix(col, vec3(0.75, 0.74, 0.7) * lit, pole);\n"
+            + "  }\n"
+            // Midsummer: a bonfire's glow from below.
+            + "  if (fx(8.0)) {\n"
+            + "    vec2 bp = p - vec2(-0.25 * uAspect, -0.72);\n"
+            + "    col += vec3(1.0, 0.45, 0.12) * exp(-dot(bp, bp) * 9.0) * 0.32 * (0.85 + 0.15 * sin(uTime * 7.0) * sin(uTime * 3.1 + 1.0));\n"
+            + "  }\n"
             // The flat: colour from the left half of the video, transparency from the right.
             + "  vec2 t = (vUv - uTile.xy) / uTile.zw;\n"
             + "  if (uHasVideo > 0.5 && t.x > 0.0 && t.x < 1.0 && t.y > 0.0 && t.y < 1.0) {\n"
@@ -428,6 +544,82 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
             + "    m = min(m * uTint, vec3(a));\n"
             + "    m = mix(m, toSRGB(uHorizon) * a, uFog * 0.35);\n"
             + "    col = m + col * (1.0 - a);\n"
+            + "  }\n"
+            // In the evening, a soft, slightly flickering glow around the flat's orange lamps.
+            + "  if (uLampGlow > 0.0) {\n"
+            + "    for (int i = 0; i < 3; i++) {\n"
+            + "      vec2 ld = (vUv - uLamps[i].xy) * vec2(uAspect, 1.0);\n"
+            + "      float r2 = dot(ld, ld);\n"
+            + "      float fl = 0.9 + 0.1 * sin(uTime * 2.1 + float(i) * 1.9) * sin(uTime * 3.3 + float(i));\n"
+            + "      col += vec3(1.0, 0.55, 0.22) * (exp(-r2 * 2500.0) * 0.22 + exp(-r2 * 120.0) * 0.07) * fl * uLampGlow * uLamps[i].z;\n"
+            + "    }\n"
+            + "  }\n"
+            // Holiday decorations in front. Good Friday: pussy-willow catkins.
+            + "  if (fx(2.0)) {\n"
+            + "    for (int k = 0; k < 2; k++) {\n"
+            + "      float fk = float(k);\n"
+            + "      vec3 d = drifter(p, 7.0 + fk * 4.0, 0.22 + fk * 0.1, 0.18, vec2(0.11, 0.19), 0.6, 11.0 + fk * 7.0);\n"
+            + "      col = mix(col, pick(d.z) * mix(0.55, 1.0, uDay), smoothstep(1.0, 0.3, length(d.xy)) * (0.8 - fk * 0.2));\n"
+            + "    }\n"
+            + "  }\n"
+            // Easter: onion-skin dyed eggs floating up, with the leaf and band prints of the dyeing.
+            + "  if (fx(3.0)) {\n"
+            + "    vec3 d = drifter(p, 4.5, -0.12, 0.28, vec2(0.17, 0.23), 0.25, 21.0);\n"
+            + "    float e = length(d.xy);\n"
+            + "    vec3 ec = pick(d.z) * (0.8 + 0.25 * step(0.55, sin(d.y * 18.0 + sin(d.x * 9.0) * 1.5)));\n"
+            + "    ec = ec * (1.05 - 0.45 * e * e) + vec3(0.22) * smoothstep(0.35, 0.0, length(d.xy - vec2(-0.35, 0.4)));\n"
+            + "    col = mix(col, ec * mix(0.6, 1.0, uDay), smoothstep(1.0, 0.93, e));\n"
+            + "  }\n"
+            // 1 May: apple blossom petals. Mother's Day: tulip petals.
+            + "  if (fx(4.0) || fx(6.0)) {\n"
+            + "    for (int k = 0; k < 2; k++) {\n"
+            + "      float fk = float(k);\n"
+            + "      vec3 d = drifter(p, 8.0 + fk * 5.0, 0.35 + fk * 0.15, 0.17, vec2(0.2, 0.12), 1.5, 31.0 + fk * 5.0);\n"
+            + "      vec3 pc = pick(d.z) * (0.85 + 0.15 * clamp(d.x, -1.0, 1.0));\n"
+            + "      col = mix(col, pc * mix(0.6, 1.0, uDay), smoothstep(1.0, 0.85, length(d.xy)) * (0.95 - fk * 0.2));\n"
+            + "    }\n"
+            + "  }\n"
+            // Pentecost: young birch leaves.
+            + "  if (fx(7.0)) {\n"
+            + "    for (int k = 0; k < 2; k++) {\n"
+            + "      float fk = float(k);\n"
+            + "      vec3 d = drifter(p, 8.0 + fk * 5.0, 0.3 + fk * 0.15, 0.17, vec2(0.22), 1.2, 41.0 + fk * 5.0);\n"
+            + "      float leaf = smoothstep(0.0, 0.06, (1.0 - d.x * d.x) * 0.5 - abs(d.y)) * step(abs(d.x), 1.0);\n"
+            + "      vec3 lc = pick(d.z) * (1.0 - 0.3 * smoothstep(0.05, 0.0, abs(d.y)));\n"
+            + "      col = mix(col, lc * mix(0.6, 1.0, uDay), leaf * (0.95 - fk * 0.2));\n"
+            + "    }\n"
+            + "  }\n"
+            // Midsummer: embers rising from the bonfire.
+            + "  if (fx(8.0)) {\n"
+            + "    for (int k = 0; k < 2; k++) {\n"
+            + "      float fk = float(k);\n"
+            + "      vec3 d = drifter(p, 14.0 + fk * 8.0, -0.5 - fk * 0.3, 0.35, vec2(0.08), 0.0, 51.0 + fk * 9.0);\n"
+            + "      float glow = smoothstep(1.0, 0.0, length(d.xy)) * (0.5 + 0.5 * sin(uTime * 9.0 + d.z * 40.0));\n"
+            + "      col += pick(d.z) * glow * smoothstep(0.95, 0.15, vUv.y) * (1.2 - fk * 0.4);\n"
+            + "    }\n"
+            + "  }\n"
+            // 18 November: a row of candles along the bottom.
+            + "  if (fx(9.0)) {\n"
+            + "    float i = floor(vUv.x * 14.0);\n"
+            + "    vec2 dc = vec2((vUv.x - (i + 0.5) / 14.0) * uAspect, vUv.y);\n"
+            + "    col = mix(col, vec3(0.75, 0.72, 0.67), step(abs(dc.x), 0.006) * step(dc.y, 0.045) * step(0.01, dc.y));\n"
+            + "    float fl = 0.85 + 0.15 * sin(uTime * 11.0 + i * 2.3) * sin(uTime * 7.0 + i);\n"
+            + "    vec2 fc = dc - vec2(sin(uTime * 5.0 + i) * 0.001, 0.058);\n"
+            + "    col = mix(col, uHolC, smoothstep(1.0, 0.3, length(fc / vec2(0.0065, 0.013 * fl))));\n"
+            + "    col += uHolC * exp(-dot(fc, fc) * 900.0) * 0.35 * fl;\n"
+            + "  }\n"
+            // Christmas: strings of twinkling lights across the top (snow falls too).
+            + "  if (fx(10.0)) {\n"
+            + "    float span = 0.5, n = 11.0;\n"
+            + "    float sx = mod(vUv.x, span) / span;\n"
+            + "    col = mix(col, vec3(0.08, 0.1, 0.08), smoothstep(0.0025, 0.0008, abs(vUv.y - (0.985 - 0.14 * sx * (1.0 - sx)))) * 0.8);\n"
+            + "    float k = floor(sx * n), bx = (k + 0.5) / n;\n"
+            + "    vec2 bd = vec2((sx - bx) * span * uAspect, vUv.y - (0.985 - 0.14 * bx * (1.0 - bx) - 0.009));\n"
+            + "    float idx = k + floor(vUv.x / span) * n;\n"
+            + "    vec3 bc = pick(fract(idx * 0.34));\n"
+            + "    float tw = 0.65 + 0.35 * sin(uTime * 2.0 + idx * 1.7);\n"
+            + "    col = mix(col, bc * (0.6 + 0.4 * tw), smoothstep(0.0075, 0.005, length(bd / vec2(1.0, 1.3))));\n"
+            + "    col += bc * exp(-dot(bd, bd) * 2200.0) * 0.45 * tw;\n"
             + "  }\n"
             // Rain: slanted streaks falling across the whole picture.
             + "  if (uRain > 0.0) {\n"
