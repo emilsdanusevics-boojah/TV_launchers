@@ -54,6 +54,7 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
   figure { margin: 0; position: relative; border-radius: 10px; overflow: hidden; background: var(--chip); }
   figure img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; image-rendering: pixelated; }
+  .photos figure img { image-rendering: auto; }
   figcaption { font-size: 12px; color: var(--muted); padding: 6px 8px; overflow-wrap: anywhere; }
   figure button { position: absolute; top: 6px; right: 6px; min-height: 32px; padding: 4px 10px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 13px; }
   .upload { display: block; margin-top: 12px; }
@@ -92,6 +93,13 @@
       <button type="button" id="addButton">Add</button>
     </div>
     <p class="hint">The name is what the launchers show. Monkey Island's font has letters, digits and + - ! : . ' only.</p>
+  </section>
+
+  <section>
+    <h2>Photos</h2>
+    <div class="grid photos" id="photos"></div>
+    <label class="upload"><input type="file" id="photoFiles" accept="image/*" multiple><span>Upload photos</span></label>
+    <p class="hint">For the Photos launcher, shown in name order, a new one every 45 seconds. Landscape photos look best. With none uploaded it shows its built-in photos of Riga.</p>
   </section>
 
   <section>
@@ -197,26 +205,30 @@ function render() {
   }
   $("addButton").disabled = select.options.length === 0;
 
-  // Backgrounds
-  const grid = $("backgrounds");
+  // Photos and backgrounds
+  images($("photos"), state.photos || [], "/api/photo", "None yet. The Photos launcher shows its built-in photos of Riga.");
+  images($("backgrounds"), state.backgrounds, "/api/background", "None yet. The launcher shows its built-in scene.");
+}
+
+function images(grid, list, endpoint, emptyText) {
   grid.innerHTML = "";
-  if (!state.backgrounds.length) {
-    grid.innerHTML = '<p class="empty">None yet. The launcher shows its built-in scene.</p>';
+  if (!list.length) {
+    grid.innerHTML = '<p class="empty">' + emptyText + '</p>';
   }
-  for (const bg of state.backgrounds) {
+  for (const item of list) {
     const fig = document.createElement("figure");
     const img = document.createElement("img");
-    img.src = "/api/background?name=" + encodeURIComponent(bg.name);
-    img.alt = bg.name;
+    img.src = endpoint + "?name=" + encodeURIComponent(item.name);
+    img.alt = item.name;
     img.loading = "lazy";
     const cap = document.createElement("figcaption");
-    cap.textContent = bg.name;
+    cap.textContent = item.name;
     const del = document.createElement("button");
     del.type = "button";
     del.textContent = "Delete";
     del.onclick = async () => {
-      if (!confirm("Delete " + bg.name + "?")) return;
-      state = await api("DELETE", "/api/background?name=" + encodeURIComponent(bg.name));
+      if (!confirm("Delete " + item.name + "?")) return;
+      state = await api("DELETE", endpoint + "?name=" + encodeURIComponent(item.name));
       render();
       toast("Deleted");
     };
@@ -261,14 +273,14 @@ $("addButton").onclick = () => {
   }
 };
 
-$("files").onchange = async (e) => {
+async function upload(e, endpoint) {
   const files = [...e.target.files];
   e.target.value = "";
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
     toast("Uploading " + (i + 1) + " of " + files.length + "…");
     try {
-      state = await api("POST", "/api/background?name=" + encodeURIComponent(f.name), f, f.type || "application/octet-stream");
+      state = await api("POST", endpoint + "?name=" + encodeURIComponent(f.name), f, f.type || "application/octet-stream");
     } catch (err) {
       toast("Couldn't upload " + f.name);
       return;
@@ -276,7 +288,9 @@ $("files").onchange = async (e) => {
   }
   render();
   toast(files.length === 1 ? "Uploaded" : "Uploaded " + files.length + " images");
-};
+}
+$("files").onchange = (e) => upload(e, "/api/background");
+$("photoFiles").onchange = (e) => upload(e, "/api/photo");
 
 // ---- Updating the launcher ----
 

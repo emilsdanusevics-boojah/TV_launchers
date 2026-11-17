@@ -27,9 +27,6 @@ final class Sky {
         return new float[] {0.75f, 0, 0, 0, 0};   // cloudy, and before the first forecast
     }
 
-    private static final String[] COMPASS = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-            "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"};
-
     // Sky colours are mixed in linear light, like the original (three.js) did.
     final float[] top = new float[3];
     final float[] horizon = new float[3];
@@ -40,7 +37,6 @@ final class Sky {
     float sunAlt;     // radians above the horizon
     float sunX, sunZ; // direction of the sun on the plan (x right, z down = south)
     float cloud, rain, snow, fog, thunder;
-    float windX, windZ;   // metres per second, on the plan
     boolean wintry;       // snow on the terrace: snowing now, or frost in the winter months
 
     static Sky at(Date when, Weather.Now weather) {
@@ -51,21 +47,6 @@ final class Sky {
         s.snow = fx[2];
         s.fog = fx[3];
         s.thunder = fx[4];
-
-        double from = 180;
-        double speed = 0;
-        if (weather != null) {
-            for (int i = 0; i < COMPASS.length; i++) {
-                if (COMPASS[i].equals(weather.windFrom)) {
-                    from = i * 22.5;
-                }
-            }
-            speed = Math.max(0, weather.windKmh) / 3.6;
-        }
-        from = Math.toRadians(from);
-        // It blows away from where it comes from (north is up the plan, -z).
-        s.windX = (float) (-Math.sin(from) * speed);
-        s.windZ = (float) (Math.cos(from) * speed);
 
         // The sun's position for Riga (a standard low-precision formula).
         double rad = Math.PI / 180, d = when.getTime() / 86400000.0 - 10957.5;

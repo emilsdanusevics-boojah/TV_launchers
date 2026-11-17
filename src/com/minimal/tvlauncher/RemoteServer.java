@@ -28,17 +28,18 @@ import java.util.concurrent.Executors;
 
 /**
  * A tiny web server for managing the launcher from a phone on the same Wi-Fi: pick the
- * launcher, choose and order the apps, upload Monkey Island backgrounds, and install an
- * update of the launcher itself. The page is assets/remote/index.html; it talks to the JSON
+ * launcher, choose and order the apps, upload photos and Monkey Island backgrounds, and
+ * install an update of the launcher itself. The page is assets/remote/index.html; it talks to the JSON
  * endpoints below.
  *
  *   GET    /                         the page
- *   GET    /api/state                launchers, apps, installed apps, backgrounds
+ *   GET    /api/state                launchers, apps, installed apps, backgrounds, photos
  *   POST   /api/launcher             {"id": "..."}
  *   POST   /api/apps                 [{"pkg": "...", "name": "..."}, ...]
  *   GET    /api/background?name=x    one background image
  *   POST   /api/background?name=x    upload (the request body is the image)
  *   DELETE /api/background?name=x
+ *   GET, POST, DELETE /api/photo?name=x   the same, for the Photos launcher's photos
  *   GET    /api/update               version, whether installs are allowed, install progress
  *   POST   /api/update               install an update (the request body is the APK)
  *   POST   /api/update/permission    open the TV's "Install unknown apps" setting
@@ -240,7 +241,9 @@ class RemoteServer extends Thread {
             AppList.set(context, items);
             sendJson(out, state());
         } else if (req.path.equals("/api/background")) {
-            background(req, out);
+            images(req, out, backgroundsDir());
+        } else if (req.path.equals("/api/photo")) {
+            images(req, out, photosDir());
         } else if (key.equals("GET /api/update")) {
             sendJson(out, updateState());
         } else if (key.equals("POST /api/update/permission")) {
@@ -277,7 +280,7 @@ class RemoteServer extends Thread {
         JSONObject state = new JSONObject();
         state.put("version", version());
         SharedPreferences prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE);
-        state.put("launcher", prefs.getString("launcher", "apartment"));
+        state.put("launcher", prefs.getString("launcher", MainActivity.DEFAULT_LAUNCHER));
         JSONArray launchers = new JSONArray();
         for (int i = 0; i < MainActivity.LAUNCHER_IDS.length; i++) {
             launchers.put(new JSONObject().put("id", MainActivity.LAUNCHER_IDS[i]).put("name", MainActivity.LAUNCHER_NAMES[i]));
@@ -293,25 +296,35 @@ class RemoteServer extends Thread {
             installed.put(new JSONObject().put("pkg", app.pkg).put("label", app.label));
         }
         state.put("installed", installed);
-        JSONArray backgrounds = new JSONArray();
-        File dir = backgroundsDir();
+        state.put("backgrounds", imageList(backgroundsDir()));
+        state.put("photos", imageList(photosDir()));
+        return state;
+    }
+
+    private static JSONArray imageList(File dir) throws Exception {
+        JSONArray list = new JSONArray();
         File[] files = dir == null ? null : dir.listFiles();
         if (files != null) {
             Arrays.sort(files);
             for (File f : files) {
                 if (f.isFile() && isImage(f.getName())) {
-                    backgrounds.put(new JSONObject().put("name", f.getName()).put("size", f.length()));
+                    list.put(new JSONObject().put("name", f.getName()).put("size", f.length()));
                 }
             }
         }
-        state.put("backgrounds", backgrounds);
-        return state;
+        return list;
     }
 
     // The Monkey Island slideshow folder: .../Android/data/com.minimal.tvlauncher/files/backgrounds
     private File backgroundsDir() {
         File root = context.getExternalFilesDir(null);
         return root == null ? null : new File(root, "backgrounds");
+    }
+
+    // The Photos launcher's photos: .../Android/data/com.minimal.tvlauncher/files/photos
+    private File photosDir() {
+        File root = context.getExternalFilesDir(null);
+        return root == null ? null : new File(root, "photos");
     }
 
     private static boolean isImage(String name) {
@@ -328,9 +341,9 @@ class RemoteServer extends Thread {
         return clean.isEmpty() || clean.length() > 120 || !isImage(clean) ? null : clean;
     }
 
-    private void background(Request req, OutputStream out) throws Exception {
+    // One image in a folder (backgrounds or photos): get, upload or delete it.
+    private void images(Request req, OutputStream out, File dir) throws Exception {
         String name = safeName(req.query.get("name"));
-        File dir = backgroundsDir();
         if (name == null || dir == null) {
             send(out, 400, "text/plain", "Bad file name".getBytes("UTF-8"));
             return;

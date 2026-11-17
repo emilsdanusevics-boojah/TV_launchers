@@ -22,6 +22,7 @@ final class Remote {
 
         void onLauncherChanged(String id);
 
+        /** Monkey Island backgrounds or Photos photos were uploaded or deleted. */
         void onBackgroundsChanged();
     }
 

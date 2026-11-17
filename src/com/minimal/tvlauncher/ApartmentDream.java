@@ -68,6 +68,7 @@ public class ApartmentDream extends DreamService {
         super.onAttachedToWindow();
         setInteractive(false);
         setFullscreen(true);
+        OrbitView.preferEvenRefresh(getWindow(), getWindow().getWindowManager().getDefaultDisplay());
 
         Typeface light = Typeface.createFromAsset(getAssets(), "fonts/HankenGrotesk-300.ttf");
         Typeface medium = Typeface.createFromAsset(getAssets(), "fonts/HankenGrotesk-500.ttf");

@@ -1,18 +1,29 @@
 # Minimal TV Launcher
 
-A home screen for Android TV / Xiaomi TV with three looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
+A home screen for Android TV / Xiaomi TV with four looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
 
-## Apartment (default)
+## Photos (default)
 
-A modern, minimal launcher. A 3D model of the apartment slowly turns in the middle of the screen, one full turn every 2½ minutes. All the space around it is a live picture of the sky over Brīvības iela 95, Riga:
+The everyday launcher: quick to open, easy to use.
 
-- **Sky colour** follows the real time of day and the cloud cover: blue by day, grey when overcast, orange and pink around the real sunrise and sunset, deep navy at night with the city's warm glow along the bottom.
-- **The sun** glows from its real direction, so the glow travels around the edge of the screen as the view turns.
-- **Clouds** cover as much of the sky as they really do, and drift with the real wind.
-- **Stars** come out on clear nights.
-- **Rain, snow, fog and lightning** fill the whole picture when they're happening.
+- A full-screen photo that slowly drifts and zooms, crossfading to the next every 45 seconds. Upload your own photos from the phone page; until you do, it shows built-in pictures of the apartment.
+- A large clock, the date, today's **Latvian name days** (vārda dienas, e.g. "Vārda dienas · Mārtiņš, Mārcis, Markuss, Marks") and the weather with a small icon, in the top-left.
+- Your apps as large tiles along the bottom, showing each app's TV banner (or its icon and name). The focused tile grows and gets an outline.
+- On red days (see Holidays below) a greeting appears and the tiles' outline takes the holiday's colour.
 
-The flat is shown in daylight by day. From just before sunset until sunrise it switches to a cozy evening look: the ceiling lights are dimmed low and the flat's three orange lamps light their corners in amber, with a soft, gently flickering glow around each one. Under heavy cloud the daytime flat looks a little duller, and around sunrise and sunset a little warmer. In winter (while it's snowing, or at 0 °C or below from November to March) both looks have snow lying on the terrace, the planters and the chairs.
+The gear (or **Menu** on the remote) opens **TV settings**, **Edit apps**, **Holidays** (on or off) and **Change launcher**.
+
+The name days are the traditional calendar list of the State Language Centre's calendar names commission ([vvc.gov.lv](https://www.vvc.gov.lv/lv/kalendarvardu-ekspertu-komisija)), taken from the [lv-namedays](https://pypi.org/project/lv-namedays/) package (MIT licence); see `assets/namedays.txt`.
+
+## Apartment
+
+A cozy launcher: a slow loop at eye level through the apartment's living room, from the bed corner past the desk and the lamps towards the terrace door. The windows show a live picture of the sky over Brīvības iela 95, Riga:
+
+- **Sky colour** follows the real time of day and the cloud cover: blue by day, grey when overcast, orange and pink around the real sunrise and sunset, deep navy at night with the city's warm glow low down.
+- **The sun** glows from its real direction when it's in view, and **stars** come out on clear nights.
+- **Rain, snow, fog and lightning** show outside the windows when they're happening.
+
+The room is shown in daylight by day. From just before sunset until sunrise it switches to a cozy evening look: the ceiling lights are dimmed low and the flat's orange lamps light the room in amber, with a soft glow around them. Under heavy cloud the daytime room looks a little duller, and around sunrise and sunset a little warmer. When it snows, the snow falls outside the windows. The app can also show winter versions of the videos with snow lying on the terrace (`web/build.sh` renders them as `room_winter_day` and `room_winter_evening`), used while it's snowing or at 0 °C or below from November to March. They aren't included at the moment, to save rendering time and space.
 
 ### Holidays
 
@@ -39,13 +50,13 @@ When 4 May or 18 November falls on a weekend, the Monday after (a day off) gets 
 On top of it:
 
 - a large clock and the date in the top-left
-- today's weather, e.g. "11° · Mainly clear · Sunset 17:58"
-- your apps as a row of names along the bottom
-- a settings button (gear) at the bottom right
+- today's weather with a small icon, e.g. "11° · Mainly clear · Sunset 17:58"
+- your apps as a row of names on a dark, see-through strip along the bottom
+- a settings button (gear) at the right end of the strip
 
-The turning flat is a pre-rendered video, so the motion is perfectly smooth: the TV's video decoder plays it, with each frame shown for exactly two screen refreshes, and the loop has no seam. There are four videos in `assets/apartment` (day, evening, and both again in winter), each one full turn at 30 frames per second. Each frame holds the flat's colour on the left and its outline (transparency) on the right, so the app can lay it over the live sky, which it draws itself with one small shader. Everything pauses while another app is open.
+The room is a pre-rendered video, so the motion is perfectly smooth: the TV's video decoder plays it, with each frame shown for exactly two screen refreshes, and the loop (75 seconds at 30 frames per second) has no seam. It's rendered with soft shading where surfaces meet and a glow around the lamps. Each frame holds the room on the left and, at half size top right, a mask of the solid parts, so the app can show its live sky through the windows; it draws the sky itself with one small shader. It starts at once by showing a still of the first frame until the video is running, draws at 1280×720 (the TV scales it up), and if the TV runs at 50 Hz it asks for 60 Hz so the 30 frames per second play evenly. Everything pauses while another app is open.
 
-The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`, which renders all four videos again in a headless browser (about an hour each; needs Node.js and ffmpeg). The lighting and camera code in `web/apartment.js` are kept. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
+The videos live in `assets/apartment` (`room_day`, `room_evening`, and `room_winter_day` / `room_winter_evening` when present), each with a `.jpg` still of its first frame. The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`, which renders the videos again in a headless browser (about an hour and a half each; needs Node.js and ffmpeg). The lighting and camera code in `web/apartment.js` are kept. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
 
 - **Left/Right** moves along the apps. **OK** opens one; **long-press OK** opens its info page.
 - **Gear** (or **Menu** on the remote) opens a menu:
@@ -53,12 +64,12 @@ The model comes from the apartment page (three.js). To update it from a new vers
   - **Edit apps**
   - **Holidays**, see above
   - **Screensaver**, opens the TV's screen saver settings (see below)
-  - **Change launcher**, where you can pick Apartment, Monkey Island or Vinyl
+  - **Change launcher**, where you can pick Photos, Apartment, Monkey Island or Vinyl
 - **Back** closes the menu.
 
 ### Screensaver
 
-The launcher also gives the TV a screensaver called **Apartment**: the turning flat over the live sky (with the evening lamps, winter snow and holiday decorations) and a large, dim clock that drifts a little every minute so nothing burns into the screen. Choose it in the TV's settings under **Device Preferences → Screen saver** (the gear menu's **Screensaver** item goes there). If your TV's menu doesn't list it, set it once with adb:
+The launcher also gives the TV a screensaver called **Apartment**: the room loop with the live sky in the windows (with the evening lamps and holiday decorations) and a large, dim clock that drifts a little every minute so nothing burns into the screen. Choose it in the TV's settings under **Device Preferences → Screen saver** (the gear menu's **Screensaver** item goes there). If your TV's menu doesn't list it, set it once with adb:
 
 ```sh
 adb shell settings put secure screensaver_components com.minimal.tvlauncher/.ApartmentDream
@@ -130,6 +141,7 @@ While the launcher is running, it serves a small page on your home Wi-Fi at **ht
 
 - switch launcher
 - show, hide, reorder and rename apps
+- upload and delete photos for the Photos launcher
 - upload and delete Monkey Island background images
 - **update the launcher** (see below)
 
@@ -213,7 +225,7 @@ sudo apt install aapt dalvik-exchange apksigner zipalign android-sdk-platform-23
 python3 make_icons.py res/drawable-xhdpi   # only needed if you change the icons
 python3 make_background.py res/drawable-nodpi/bg_default.png   # built-in background art
 python3 make_verb_font.py src/com/minimal/tvlauncher/VerbFont.java   # verb font
-web/build.sh                               # 3D apartment -> assets/apartment/orbit_day.mp4, orbit_night.mp4 (needs Node.js, ffmpeg)
+web/build.sh                               # 3D apartment -> assets/apartment/room_*.mp4 (needs Node.js, ffmpeg)
 ./build.sh                                 # -> MinimalTVLauncher.apk
 ```
 

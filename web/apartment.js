@@ -1,13 +1,13 @@
 // The apartment model from the "Apartment" page (three.js), set up to render the video the
-// Apartment launcher shows: the flat turning slowly, on a transparent background, from the
-// launcher's camera. The app draws the live sky around it and plays the video in a loop, so
-// the TV only decodes video instead of drawing the detailed model every frame.
+// Apartment launcher shows: a slow loop at eye level through the living room (see "the room
+// view" below). The app plays the video in a loop with its live sky in the windows, so the
+// TV only decodes video instead of drawing the detailed model every frame.
 //
 // web/render_video.js loads this page (bundled by web/build.sh) in a headless browser, asks
-// for each frame through window.renderSetup / window.renderFrame, and encodes the video.
-// The lighting (sun, night lamps) comes from the original's outdoor weather code.
+// for each frame through window.renderSetup / window.renderRoomFrame, and encodes the video.
+// The lighting (sun, evening lamps) comes from the original's outdoor weather code.
 
-// Seen from above: no ceiling.
+// The model page's ceiling toggle; the room view shows the ceiling (see setupRoom).
 function applyToggles() {
   if (ceiling) ceiling.visible = false;
 }
@@ -1082,6 +1082,12 @@ function build(H) {
 }
 // ==== MODEL END ====
 
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+
 build(3.0);
 
 /* ---------- outdoor weather ambiance: Riga, Brīvības iela 95 ----------
@@ -1311,23 +1317,13 @@ function mergeStatic() {
 }
 mergeStatic();
 
-// The launcher's camera: a steep view from above, turning around the middle of the flat and
-// terrace. fov is the vertical angle of the whole TV screen; the video holds only the part
-// of the screen the turning flat ever covers (VIEW, as fractions of the screen height,
-// centred on the flat), so it's wider than tall.
-const bounds = new THREE.Box3().setFromObject(root);
-const target = new THREE.Vector3((bounds.min.x + bounds.max.x) / 2, 0, (bounds.min.z + bounds.max.z) / 2);
-const RADIUS = 12.2, HEIGHT = 21.2, FOV = 42;
-const VIEW = { w: 1.04, h: 1.04 * 880 / 960 };   // matches the video's 960×880 picture
-
-/** Lighting for one video: when (ISO time, sets the sun) and weather code, and frame size. */
 // The evening look: the flat's orange lamps glow brightly and light their corners, the
 // ceiling lights are dimmed to a warm low light, and the moonlight outside stays cool.
-function makeCozy() {
+function makeCozy(strength = 1.8) {
   for (const light of lightsGroup.children) {
     if (light.color.getHex() === 0xff6a2a) {          // the orange lamps
       light.color.set(0xff8a3d);                       // a little more amber than red
-      light.intensity *= 3.2;
+      light.intensity *= strength;
       light.distance *= 1.9;
       light.castShadow = true;                         // so walls keep the glow inside
       light.shadow.mapSize.set(1024, 1024);
@@ -1376,8 +1372,97 @@ float snowCover() {
   });
 }
 
-window.renderSetup = ({ when, code, width, height, view, cozy, winter }) => {
-  if (view) Object.assign(VIEW, view);   // for measuring
+/* ---------- the room view ----------
+   The launcher's picture since 8.0: a slow loop at eye level through the living room, from
+   the bed corner towards the desk, the lamps and the terrace door. Rendered with ambient
+   occlusion (soft shading where surfaces meet) and a glow around bright lights. The sky is
+   left out: a second, plain pass marks what's solid, so the app can show its live sky
+   through the windows. */
+const ROOM = { fov: 56 };
+function roomCamera(t) {
+  const a = 2 * Math.PI * t;
+  camera.position.set(4.3 + 0.15 * Math.cos(a), 1.58 + 0.04 * Math.sin(2 * a), 2.05 + 0.22 * Math.sin(a));
+  camera.lookAt(0.9, 0.95, 1.45 + 0.45 * Math.sin(a + 0.6));
+}
+
+let composer = null, maskCanvas = null, mask2d = null;
+const maskMaterials = new Map();
+function setupRoom(width, height) {
+  scene.add(ceiling);
+  ceiling.visible = true;
+  camera.fov = ROOM.fov;
+  camera.aspect = width / height;
+  camera.near = 0.05;
+  camera.updateProjectionMatrix();
+  // Rendered at the video's own size, with 4× multisampling for smooth edges (much
+  // cheaper than drawing larger and scaling down).
+  composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(width, height, { type: THREE.HalfFloatType, samples: 4 }));
+  composer.setSize(width, height);
+  composer.addPass(new RenderPass(scene, camera));
+  const ao = new GTAOPass(scene, camera, width, height);
+  ao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.5, thickness: 1.2, scale: 1.0, samples: 8 });
+  ao.blendIntensity = 0.9;
+  composer.addPass(ao);
+  // Lamps glow in the evening; by day only the brightest highlights do.
+  const evening = renderer.toneMappingExposure < 1 && hemi.intensity < 0.5;
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(width, height), evening ? 0.45 : 0.2, 0.55, evening ? 0.9 : 1.4));
+  if (!evening) renderer.toneMappingExposure = 0.72;   // white walls in daylight, without glare
+  composer.addPass(new OutputPass());
+  // The solid-parts pass: everything white and unlit; window glass left out, lace
+  // curtains as see-through as they are.
+  scene.traverse(o => {
+    if (!o.isMesh || !o.material || maskMaterials.has(o.material)) return;
+    const m = o.material;
+    maskMaterials.set(m, m === M.glass ? null : new THREE.MeshBasicMaterial({
+      color: 0xffffff, map: m.transparent ? m.map : null, transparent: m.transparent,
+      opacity: m.transparent ? m.opacity : 1, side: m.side, depthWrite: !m.transparent,
+    }));
+  });
+}
+
+function renderRoom(t, ow, oh) {
+  roomCamera(t);
+  composer.render();
+  if (outCanvas.width !== ow || outCanvas.height !== oh) { outCanvas.width = ow; outCanvas.height = oh; }
+  out2d.clearRect(0, 0, ow, oh);
+  out2d.imageSmoothingEnabled = true;
+  out2d.imageSmoothingQuality = "high";
+  out2d.drawImage(renderer.domElement, 0, 0, ow, oh);
+  const colour = out2d.getImageData(0, 0, ow, oh);
+  // The solid parts.
+  const swapped = [];
+  scene.traverse(o => {
+    if (o.isMesh && maskMaterials.has(o.material)) {
+      swapped.push([o, o.material, o.visible]);
+      const mm = maskMaterials.get(o.material);
+      if (mm) o.material = mm; else o.visible = false;
+    }
+  });
+  const tm = renderer.toneMapping;
+  renderer.toneMapping = THREE.NoToneMapping;
+  renderer.setClearColor(0x000000, 0);
+  renderer.render(scene, camera);
+  renderer.toneMapping = tm;
+  swapped.forEach(([o, m, v]) => { o.material = m; o.visible = v; });
+  if (!maskCanvas) { maskCanvas = document.createElement("canvas"); mask2d = maskCanvas.getContext("2d", { willReadFrequently: true }); }
+  if (maskCanvas.width !== ow || maskCanvas.height !== oh) { maskCanvas.width = ow; maskCanvas.height = oh; }
+  mask2d.clearRect(0, 0, ow, oh);
+  mask2d.imageSmoothingEnabled = true;
+  mask2d.imageSmoothingQuality = "high";
+  mask2d.drawImage(renderer.domElement, 0, 0, ow, oh);
+  const alpha = mask2d.getImageData(0, 0, ow, oh).data;
+  const px = colour.data;
+  for (let i = 3; i < px.length; i += 4) px[i] = alpha[i];
+  let bin = "";
+  for (let i = 0; i < px.length; i += 0x8000) bin += String.fromCharCode.apply(null, px.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+/** One frame of the room loop, t from 0 to 1, as base64 RGBA (not premultiplied). */
+window.renderRoomFrame = (t, ow, oh) => renderRoom(t, ow, oh);
+
+/** Lighting for one video: when (ISO time, sets the sun), weather code, evening lamps
+ *  (cozy), snow outside (winter), and the frame size. */
+window.renderSetup = ({ when, code, width, height, cozy, winter }) => {
   window.launcherNow = when;
   weather = { ...weather, code };
   applyAtmosphere();
@@ -1387,31 +1472,9 @@ window.renderSetup = ({ when, code, width, height, view, cozy, winter }) => {
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.needsUpdate = true;
   renderer.setSize(width, height, false);
-  // The screen's camera, cropped to VIEW around its centre.
-  camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(FOV / 2)) * VIEW.h));
-  camera.aspect = VIEW.w / VIEW.h;
-  camera.updateProjectionMatrix();
+  setupRoom(width, height);
 };
-window.renderInfo = () => ({ target: target.toArray(), bounds: [bounds.min.toArray(), bounds.max.toArray()], view: VIEW, fov: FOV });
 
-/**
- * Renders the flat at one angle and returns it scaled down to ow × oh pixels, as base64
- * RGBA (not premultiplied). Rendering larger than the output smooths edges and fine detail.
- */
 const outCanvas = document.createElement("canvas");
 const out2d = outCanvas.getContext("2d", { willReadFrequently: true });
-window.renderFrame = (angle, ow, oh) => {
-  camera.position.set(target.x + Math.sin(angle) * RADIUS, HEIGHT, target.z + Math.cos(angle) * RADIUS);
-  camera.lookAt(target);
-  renderer.render(scene, camera);
-  if (outCanvas.width !== ow || outCanvas.height !== oh) { outCanvas.width = ow; outCanvas.height = oh; }
-  out2d.clearRect(0, 0, ow, oh);
-  out2d.imageSmoothingEnabled = true;
-  out2d.imageSmoothingQuality = "high";
-  out2d.drawImage(renderer.domElement, 0, 0, ow, oh);
-  const px = out2d.getImageData(0, 0, ow, oh).data;
-  let bin = "";
-  for (let i = 0; i < px.length; i += 0x8000) bin += String.fromCharCode.apply(null, px.subarray(i, i + 0x8000));
-  return btoa(bin);
-};
 document.documentElement.classList.add("ready");

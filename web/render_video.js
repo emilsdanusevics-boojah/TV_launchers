@@ -1,14 +1,14 @@
-// Renders the Apartment launcher's video: one full turn of the flat, in a loop, with the
-// flat's transparency packed beside it. Run by web/build.sh; needs Node.js, Playwright's
-// Chromium and ffmpeg (with libx264).
+// Renders the Apartment launcher's video: a slow loop at eye level through the living room
+// (see "the room view" in web/apartment.js). Run by web/build.sh; needs Node.js,
+// Playwright's Chromium and ffmpeg (with libx264).
 //
-//   node web/render_video.js <bundled render page dir> <day|night|winter_day|winter_night> <out.mp4> [frames]
+//   node web/render_video.js <bundled render page dir> <day|evening|winter_day|winter_evening> <out.mp4> [frames]
 //
 // Each frame is drawn by the page (web/render.html + web/apartment.js) in headless
-// Chromium's software renderer at SUPERSAMPLE × the video size, scaled down, then:
-//   left half   the flat's colour, premultiplied by its transparency (black around it)
-//   right half  the transparency itself, as grey
-// The app recombines the halves over its live sky. Frames are shared out to WORKERS
+// Chromium's software renderer at SUPERSAMPLE × the video size, scaled down, and packed as
+//   left, 1280×720        the room, premultiplied by how solid it is (black in the windows)
+//   right top, 640×360    how solid it is, as grey (black where the windows show sky)
+// The app shows its live sky through the windows. Frames are shared out to WORKERS
 // browsers, each encoding its own stretch; the stretches are joined at the end.
 const { chromium } = require("playwright");
 const { spawn, execFileSync } = require("child_process");
@@ -16,16 +16,15 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-const FPS = 30, SECONDS = 150;                 // one turn every 2½ minutes, as before
-const W = 960, H = 880, SUPERSAMPLE = 1.5;     // each half of the picture
-const ANGLE0 = 0.6;                            // the angle of frame 0 (the app uses the same)
+const FPS = 30, SECONDS = 75;                  // the loop takes 75 seconds
+const W = 1280, H = 720, SUPERSAMPLE = 1;      // the room picture (smoothed by multisampling)
 const GOP = 5 * FPS;                           // a keyframe every 5 seconds
 const WORKERS = Math.max(1, Math.min(4, os.cpus().length));
 const LIGHTING = {
   day: { when: "2026-06-21T10:00:00Z", code: "partly" },     // early afternoon, a few clouds
-  night: { when: "2026-10-24T20:30:00Z", code: "clear", cozy: true },   // evening, the orange lamps glowing
-  winter_day: { when: "2026-06-21T10:00:00Z", code: "cloudy", winter: true },          // snow outside, soft light
-  winter_night: { when: "2026-10-24T20:30:00Z", code: "clear", cozy: true, winter: true },
+  evening: { when: "2026-10-24T20:30:00Z", code: "clear", cozy: true },   // the orange lamps glowing
+  winter_day: { when: "2026-06-21T10:00:00Z", code: "cloudy", winter: true },          // snow on the terrace, soft light
+  winter_evening: { when: "2026-10-24T20:30:00Z", code: "clear", cozy: true, winter: true },
 };
 
 const [, , pageDir, variant, outFile, framesArg] = process.argv;
@@ -42,8 +41,8 @@ async function renderStretch(from, to, segFile) {
 
   const ffmpeg = spawn("ffmpeg", ["-loglevel", "error", "-y",
     "-f", "rawvideo", "-pix_fmt", "rgba", "-s", `${W}x${H}`, "-r", String(FPS), "-i", "-",
-    "-filter_complex", "[0:v]split[c][a];[a]alphaextract,format=rgb24[al];[c]format=rgb24[cc];" +
-      "[cc][al]hstack=inputs=2,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
+    "-filter_complex", `[0:v]split[c][a];[a]alphaextract,scale=${W / 2}:${H / 2}:flags=area,pad=${W / 2}:${H},format=rgb24[al];` +
+      "[c]format=rgb24[cc];[cc][al]hstack=inputs=2,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
     "-c:v", "libx264", "-preset", "slow", "-crf", "22", "-profile:v", "high", "-level", "4.1",
     "-bf", "0", "-g", String(GOP), "-keyint_min", String(GOP), "-sc_threshold", "0",
     "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
@@ -51,8 +50,7 @@ async function renderStretch(from, to, segFile) {
   const done = new Promise((ok, fail) => ffmpeg.on("exit", c => (c === 0 ? ok() : fail(new Error("ffmpeg " + c)))));
 
   for (let i = from; i < to; i++) {
-    const angle = ANGLE0 + 2 * Math.PI * i / total;
-    const px = Buffer.from(await page.evaluate(([a, w, h]) => window.renderFrame(a, w, h), [angle, W, H]), "base64");
+    const px = Buffer.from(await page.evaluate(([t, w, h]) => window.renderRoomFrame(t, w, h), [i / total, W, H]), "base64");
     for (let j = 0; j < px.length; j += 4) {   // premultiply
       const a = px[j + 3];
       if (a !== 255) { px[j] = px[j] * a / 255; px[j + 1] = px[j + 1] * a / 255; px[j + 2] = px[j + 2] * a / 255; }

@@ -1,0 +1,2 @@
+# Built-in photos for the Photos launcher: file, a tab, the credit shown on screen.
+# apartment_*.jpg are renders of the apartment model (no credit needed).

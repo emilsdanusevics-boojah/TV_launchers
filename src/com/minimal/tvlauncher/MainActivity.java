@@ -28,9 +28,9 @@ import java.util.List;
  */
 public class MainActivity extends Activity implements NowPlaying.Listener, Remote.Listener {
 
-    static final String[] LAUNCHER_IDS = {"apartment", "monkey_island", "vinyl"};
-    static final String[] LAUNCHER_NAMES = {"Apartment", "Monkey Island", "Vinyl"};
-    private static final String DEFAULT_LAUNCHER = "apartment";
+    static final String[] LAUNCHER_IDS = {"photos", "apartment", "monkey_island", "vinyl"};
+    static final String[] LAUNCHER_NAMES = {"Photos", "Apartment", "Monkey Island", "Vinyl"};
+    static final String DEFAULT_LAUNCHER = "photos";
 
     private static final long PAUSED_COUNTS_AS_STOPPED_MS = 30000;
     private static final long FADE_MS = 450;
@@ -85,8 +85,10 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             base = new MonkeyIslandTheme(this);
         } else if ("vinyl".equals(launcher)) {
             base = new VinylTheme(this);
-        } else {
+        } else if ("apartment".equals(launcher)) {
             base = new ApartmentTheme(this);
+        } else {
+            base = new PhotosTheme(this);
         }
         container = new FrameLayout(this);
         baseView = base.createView();
@@ -155,6 +157,9 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         // When hidden, the slideshow re-reads the folder as it comes back on screen anyway.
         if (resumed && !showingVinyl && base instanceof MonkeyIslandTheme) {
             ((MonkeyIslandTheme) base).refreshBackground();
+        }
+        if (base instanceof PhotosTheme) {
+            ((PhotosTheme) base).refreshPhotos();
         }
     }
 
