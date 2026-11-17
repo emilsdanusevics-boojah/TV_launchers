@@ -41,6 +41,7 @@ final class Sky {
     float sunX, sunZ; // direction of the sun on the plan (x right, z down = south)
     float cloud, rain, snow, fog, thunder;
     float windX, windZ;   // metres per second, on the plan
+    boolean wintry;       // snow on the terrace: snowing now, or frost in the winter months
 
     static Sky at(Date when, Weather.Now weather) {
         Sky s = new Sky();
@@ -80,6 +81,12 @@ final class Sky {
         s.sunAlt = (float) alt;
         s.sunX = (float) (Math.cos(alt) * Math.sin(az));
         s.sunZ = (float) (-Math.cos(alt) * Math.cos(az));
+
+        java.util.Calendar cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Riga"));
+        cal.setTime(when);
+        int month = cal.get(java.util.Calendar.MONTH);
+        boolean winterMonths = month >= java.util.Calendar.NOVEMBER || month <= java.util.Calendar.MARCH;
+        s.wintry = s.snow > 0 || (weather != null && weather.tempC <= 0 && winterMonths);
 
         float c = s.cloud;
         s.day = smoothstep(-0.12f, 0.12f, s.sunAlt);

@@ -2,7 +2,7 @@
 // flat's transparency packed beside it. Run by web/build.sh; needs Node.js, Playwright's
 // Chromium and ffmpeg (with libx264).
 //
-//   node web/render_video.js <bundled render page dir> <day|night> <out.mp4> [frames]
+//   node web/render_video.js <bundled render page dir> <day|night|winter_day|winter_night> <out.mp4> [frames]
 //
 // Each frame is drawn by the page (web/render.html + web/apartment.js) in headless
 // Chromium's software renderer at SUPERSAMPLE × the video size, scaled down, then:
@@ -24,6 +24,8 @@ const WORKERS = Math.max(1, Math.min(4, os.cpus().length));
 const LIGHTING = {
   day: { when: "2026-06-21T10:00:00Z", code: "partly" },     // early afternoon, a few clouds
   night: { when: "2026-10-24T20:30:00Z", code: "clear", cozy: true },   // evening, the orange lamps glowing
+  winter_day: { when: "2026-06-21T10:00:00Z", code: "cloudy", winter: true },          // snow outside, soft light
+  winter_night: { when: "2026-10-24T20:30:00Z", code: "clear", cozy: true, winter: true },
 };
 
 const [, , pageDir, variant, outFile, framesArg] = process.argv;

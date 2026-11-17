@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.minimal.tvlauncher"
-    android:versionCode="23"
-    android:versionName="7.1">
+    android:versionCode="24"
+    android:versionName="7.2">
 
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="28" />
 
@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
     <!-- Vinyl launcher: some players give the album cover as a web link. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Updates uploaded from the phone page (Updater); the TV still asks before installing. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -45,6 +47,21 @@
             android:excludeFromRecents="true"
             android:screenOrientation="landscape"
             android:theme="@style/LauncherTheme" />
+
+        <!-- The Apartment screensaver, picked in the TV's Screen saver settings. -->
+        <service
+            android:name=".ApartmentDream"
+            android:label="Apartment"
+            android:exported="true"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <!-- Hears back from Android's installer during an update from the phone. -->
+        <receiver android:name=".Updater$Result" android:exported="false" />
 
         <!-- Vinyl launcher: lets the launcher see what Spotify is playing once the user
              grants notification access (see MediaListener). -->

@@ -22,7 +22,9 @@ import javax.microedition.khronos.opengles.GL10;
  *
  * The flat is a pre-rendered video (assets/apartment, made by web/render_video.js): one full
  * turn, looped, with the flat's colour in the left half of each frame and its transparency in
- * the right half. One for daytime and one for the evening, lit by its orange lamps. The TV's
+ * the right half. One for daytime and one for the evening, lit by its orange lamps, and both
+ * again with snow on the terrace for winter (when it's snowing, or freezing from November to
+ * March). The TV's
  * video decoder plays it ({@link VideoLoop}), so the motion costs almost nothing, and one
  * shader draws the sky around it (time of day, the sun from its real direction, clouds
  * drifting with the wind, stars, fog, the city's warm glow at night), then the flat, with a
@@ -36,6 +38,8 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
     private static final String TAG = "OrbitView";
     private static final String DAY = "apartment/orbit_day.mp4";
     private static final String EVENING = "apartment/orbit_night.mp4";
+    private static final String WINTER_DAY = "apartment/orbit_winter_day.mp4";       // snow on the terrace
+    private static final String WINTER_EVENING = "apartment/orbit_winter_night.mp4";
     // How the video was rendered (see web/render_video.js and web/apartment.js).
     private static final double ANGLE0 = 0.6;              // the camera's angle at the first frame
     private static final long FALLBACK_TURN_US = 150000000L;
@@ -221,8 +225,14 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
         long turnUs = FALLBACK_TURN_US;
         synchronized (videoLock) {
             String want = sky.lampsOn() ? EVENING : DAY;
+            if (sky.wintry) {
+                String winter = sky.lampsOn() ? WINTER_EVENING : WINTER_DAY;
+                if (hasAsset(winter)) {
+                    want = winter;
+                }
+            }
             if (loop != null && !want.equals(loopPath)) {
-                stopVideo();   // evening came or went: carry on with the other video
+                stopVideo();   // evening or winter came or went: carry on with the other video
             }
             if (loop != null && !loop.alive()) {
                 stopVideo();
@@ -335,6 +345,22 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
         GLES20.glUniform3f(u("uHolC"), hc[6], hc[7], hc[8]);
 
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+    }
+
+    private final java.util.Map<String, Boolean> assets = new java.util.HashMap<String, Boolean>();
+
+    private boolean hasAsset(String path) {
+        Boolean known = assets.get(path);
+        if (known == null) {
+            try {
+                getContext().getAssets().openFd(path).close();
+                known = true;
+            } catch (Exception e) {
+                known = false;
+            }
+            assets.put(path, known);
+        }
+        return known;
     }
 
     // Where each lamp is on screen (x, y as fractions of it, and 1 if in front of the

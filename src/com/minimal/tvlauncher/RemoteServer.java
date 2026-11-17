@@ -28,8 +28,9 @@ import java.util.concurrent.Executors;
 
 /**
  * A tiny web server for managing the launcher from a phone on the same Wi-Fi: pick the
- * launcher, choose and order the apps, and upload Monkey Island backgrounds. The page is
- * assets/remote/index.html; it talks to the JSON endpoints below.
+ * launcher, choose and order the apps, upload Monkey Island backgrounds, and install an
+ * update of the launcher itself. The page is assets/remote/index.html; it talks to the JSON
+ * endpoints below.
  *
  *   GET    /                         the page
  *   GET    /api/state                launchers, apps, installed apps, backgrounds
@@ -38,10 +39,14 @@ import java.util.concurrent.Executors;
  *   GET    /api/background?name=x    one background image
  *   POST   /api/background?name=x    upload (the request body is the image)
  *   DELETE /api/background?name=x
+ *   GET    /api/update               version, whether installs are allowed, install progress
+ *   POST   /api/update               install an update (the request body is the APK)
+ *   POST   /api/update/permission    open the TV's "Install unknown apps" setting
  */
 class RemoteServer extends Thread {
 
     private static final int MAX_UPLOAD = 25 * 1024 * 1024;
+    private static final long MAX_APK = 400L * 1024 * 1024;
     private static final List<String> IMAGE_TYPES = Arrays.asList("jpg", "jpeg", "png", "webp", "gif");
 
     private final Context context;
@@ -92,6 +97,9 @@ class RemoteServer extends Thread {
         Map<String, String> query = new HashMap<String, String>();
         Map<String, String> headers = new HashMap<String, String>();
         byte[] body = new byte[0];
+        // An APK upload isn't read into memory: the installer reads it from the connection.
+        InputStream stream;
+        long streamLength = -1;
     }
 
     private void handle(Socket socket) {
@@ -164,7 +172,13 @@ class RemoteServer extends Thread {
             }
         }
         String length = req.headers.get("content-length");
-        if (length != null) {
+        if (length != null && req.method.equals("POST") && req.path.equals("/api/update")) {
+            req.streamLength = Long.parseLong(length);
+            if (req.streamLength <= 0 || req.streamLength > MAX_APK) {
+                throw new IOException("Too large");
+            }
+            req.stream = in;
+        } else if (length != null) {
             int n = Integer.parseInt(length);
             if (n < 0 || n > MAX_UPLOAD) {
                 throw new IOException("Too large");
@@ -183,7 +197,8 @@ class RemoteServer extends Thread {
     }
 
     private static void send(OutputStream out, int status, String type, byte[] body) throws IOException {
-        String reason = status == 200 ? "OK" : status == 404 ? "Not Found" : status == 400 ? "Bad Request" : "Error";
+        String reason = status == 200 ? "OK" : status == 404 ? "Not Found" : status == 400 ? "Bad Request"
+                : status == 409 ? "Conflict" : "Error";
         String head = "HTTP/1.1 " + status + " " + reason + "\r\n"
                 + "Content-Type: " + type + "\r\n"
                 + "Content-Length: " + body.length + "\r\n"
@@ -226,13 +241,41 @@ class RemoteServer extends Thread {
             sendJson(out, state());
         } else if (req.path.equals("/api/background")) {
             background(req, out);
+        } else if (key.equals("GET /api/update")) {
+            sendJson(out, updateState());
+        } else if (key.equals("POST /api/update/permission")) {
+            Updater.openPermission(context);
+            sendJson(out, updateState());
+        } else if (key.equals("POST /api/update")) {
+            if (req.stream == null) {
+                send(out, 400, "text/plain", "No file".getBytes("UTF-8"));
+            } else if (!Updater.allowed(context)) {
+                send(out, 409, "text/plain", "Installing updates isn't allowed yet".getBytes("UTF-8"));
+            } else {
+                Updater.install(context, req.stream, req.streamLength);
+                sendJson(out, updateState());
+            }
         } else {
             send(out, 404, "text/plain", "Not found".getBytes("UTF-8"));
         }
     }
 
+    private JSONObject updateState() throws Exception {
+        return new JSONObject().put("version", version()).put("started", Updater.STARTED).put("allowed", Updater.allowed(context))
+                .put("state", Updater.state()).put("message", Updater.message());
+    }
+
+    private String version() {
+        try {
+            return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     private JSONObject state() throws Exception {
         JSONObject state = new JSONObject();
+        state.put("version", version());
         SharedPreferences prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE);
         state.put("launcher", prefs.getString("launcher", "apartment"));
         JSONArray launchers = new JSONArray();

@@ -12,7 +12,7 @@ A modern, minimal launcher. A 3D model of the apartment slowly turns in the midd
 - **Stars** come out on clear nights.
 - **Rain, snow, fog and lightning** fill the whole picture when they're happening.
 
-The flat is shown in daylight by day. From just before sunset until sunrise it switches to a cozy evening look: the ceiling lights are dimmed low and the flat's three orange lamps light their corners in amber, with a soft, gently flickering glow around each one. Under heavy cloud the daytime flat looks a little duller, and around sunrise and sunset a little warmer.
+The flat is shown in daylight by day. From just before sunset until sunrise it switches to a cozy evening look: the ceiling lights are dimmed low and the flat's three orange lamps light their corners in amber, with a soft, gently flickering glow around each one. Under heavy cloud the daytime flat looks a little duller, and around sunrise and sunset a little warmer. In winter (while it's snowing, or at 0 °C or below from November to March) both looks have snow lying on the terrace, the planters and the chairs.
 
 ### Holidays
 
@@ -43,17 +43,26 @@ On top of it:
 - your apps as a row of names along the bottom
 - a settings button (gear) at the bottom right
 
-The turning flat is a pre-rendered video, so the motion is perfectly smooth: the TV's video decoder plays it, with each frame shown for exactly two screen refreshes, and the loop has no seam. There are two videos in `assets/apartment`, day and evening, each one full turn at 30 frames per second. Each frame holds the flat's colour on the left and its outline (transparency) on the right, so the app can lay it over the live sky, which it draws itself with one small shader. Everything pauses while another app is open.
+The turning flat is a pre-rendered video, so the motion is perfectly smooth: the TV's video decoder plays it, with each frame shown for exactly two screen refreshes, and the loop has no seam. There are four videos in `assets/apartment` (day, evening, and both again in winter), each one full turn at 30 frames per second. Each frame holds the flat's colour on the left and its outline (transparency) on the right, so the app can lay it over the live sky, which it draws itself with one small shader. Everything pauses while another app is open.
 
-The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`, which renders both videos again in a headless browser (about an hour each; needs Node.js and ffmpeg). The lighting and camera code in `web/apartment.js` are kept. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
+The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`, which renders all four videos again in a headless browser (about an hour each; needs Node.js and ffmpeg). The lighting and camera code in `web/apartment.js` are kept. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
 
 - **Left/Right** moves along the apps. **OK** opens one; **long-press OK** opens its info page.
 - **Gear** (or **Menu** on the remote) opens a menu:
   - **TV settings**
   - **Edit apps**
   - **Holidays**, see above
+  - **Screensaver**, opens the TV's screen saver settings (see below)
   - **Change launcher**, where you can pick Apartment, Monkey Island or Vinyl
 - **Back** closes the menu.
+
+### Screensaver
+
+The launcher also gives the TV a screensaver called **Apartment**: the turning flat over the live sky (with the evening lamps, winter snow and holiday decorations) and a large, dim clock that drifts a little every minute so nothing burns into the screen. Choose it in the TV's settings under **Device Preferences → Screen saver** (the gear menu's **Screensaver** item goes there). If your TV's menu doesn't list it, set it once with adb:
+
+```sh
+adb shell settings put secure screensaver_components com.minimal.tvlauncher/.ApartmentDream
+```
 
 ## Live weather
 
@@ -66,6 +75,8 @@ Looks like the interface of *The Secret of Monkey Island* (VGA). The background 
 - a **sentence line** that says what OK will do, e.g. "Open Spotify"
 - **verbs** on the left
 - an **inventory** on the right with the names of your apps
+
+On Latvia's red days (see Holidays above) someone in the scene says something about the day in the game's style, e.g. *"It's Jāņi. I should find some cheese and a wreath."* or *"Look behind you, a three-headed Christmas tree!"*: when the home screen appears and every few minutes after. The Apartment launcher's Holidays setting turns this off too.
 
 Everything except the background is drawn on a 320×180 pixel grid. The verbs and app names use a hand-drawn recreation of the game's bold verb font (`make_verb_font.py`). Everything else uses the [Tiny5](https://github.com/Gissio/font_tiny5) pixel font (SIL Open Font License; see `assets/fonts/Tiny5-OFL.txt`).
 
@@ -120,8 +131,19 @@ While the launcher is running, it serves a small page on your home Wi-Fi at **ht
 - switch launcher
 - show, hide, reorder and rename apps
 - upload and delete Monkey Island background images
+- **update the launcher** (see below)
 
 Changes appear on the TV straight away. The page is only reachable on your local network, and there's no password: anyone on your Wi-Fi who knows the address can use it.
+
+### Updating from your phone
+
+From version 7.2, updates need no computer:
+
+1. Download the new `MinimalTVLauncher.apk` to your phone.
+2. Open the phone page and, under **Update the launcher**, choose the file. The first time, the page asks you to allow updates: press **Open the setting on the TV**, turn on *Allow from this source* for the launcher on the TV, and press Back.
+3. The TV asks *"Do you want to install an update to this existing application?"*: press **Install** with the remote. The launcher restarts with the new version and the page says so.
+
+Keep the TV on the home screen while you do this. The TV only accepts an update signed with the same key as the installed launcher, so someone else on your Wi-Fi can't install a different app this way, and nothing installs without pressing Install on the TV.
 
 ## Monkey Island backgrounds
 
@@ -143,6 +165,8 @@ If the folder is empty or missing, the launcher shows a single `files/background
 Backgrounds fill the scene area above the panel (about 320×132 grid pixels, cropped from the centre) and are scaled up with no smoothing, so pixel art stays sharp. Screenshots work best cropped to just the scene, without the game's own verb panel. A 320×144 Monkey Island scene, or a whole-number enlargement of one, fits almost exactly.
 
 ## Install (from a computer on the same Wi-Fi as the TV)
+
+This is needed for the first install (and for updating to 7.2, the first version that can update itself). Later updates can come from your phone; see above.
 
 1. On the TV, go to **Settings → Device Preferences → About** and click **Build** 7 times. Then, under **Developer options**, turn on **USB debugging** (on some models it's also called *Network/ADB debugging*). Write down the TV's IP address from **Network & Internet**.
 2. On your computer, install `adb` (Android platform-tools) and run:

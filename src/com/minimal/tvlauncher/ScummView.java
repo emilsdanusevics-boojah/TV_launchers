@@ -126,6 +126,8 @@ public class ScummView extends View {
     private String date = "";
     private String message;
     private long messageUntil;
+    private String speech;        // a line of dialogue in the scene, as if someone were talking
+    private int speechColor;
 
     private List<String> choices;
     private String choicePrompt = "";
@@ -200,7 +202,13 @@ public class ScummView extends View {
         invalidate();
     }
 
-    /** Back to the first app with the default verb, as after pressing Home. */
+    /** A line of dialogue in the scene, above the panel, in {@code color}; null clears it. */
+    void setSpeech(String text, int color) {
+        speech = text;
+        speechColor = color;
+        invalidate();
+    }
+
     /**
      * Replaces the verbs and inventory with lines to choose from, until one is picked or Back.
      * {@code prompt} is shown in the sentence line meanwhile.
@@ -214,6 +222,7 @@ public class ScummView extends View {
         invalidate();
     }
 
+    /** Back to the first app with the default verb, as after pressing Home. */
     void reset() {
         choices = null;
         activeVerb = defaultVerb;
@@ -410,6 +419,18 @@ public class ScummView extends View {
         text(c, date, 6, 3 + clockH, 1, DATE, true);
 
         int panelTop = gh - PANEL_HEIGHT;
+        // Dialogue, centred low in the scene like a character talking.
+        if (speech != null && speech.length() > 0) {
+            Paint.FontMetricsInt fm = textPaint.getFontMetricsInt();
+            int lineH = fm.descent - fm.ascent;
+            List<String> lines = wrap(speech, gw - 48);
+            int y = panelTop - 5 - lines.size() * lineH;
+            for (String line : lines) {
+                text(c, line, 0, y, 1, speechColor, true, gw);
+                y += lineH;
+            }
+        }
+
         fillPaint.setColor(0xFF000000);
         c.drawRect(0, panelTop, gw, gh, fillPaint);
 
@@ -494,6 +515,25 @@ public class ScummView extends View {
                 }
             }
         }
+    }
+
+    // Splits dialogue into lines that fit in {@code width} pixels of the pixel font.
+    private List<String> wrap(String text, int width) {
+        List<String> lines = new ArrayList<String>();
+        String line = "";
+        for (String word : text.split(" ")) {
+            String longer = line.isEmpty() ? word : line + " " + word;
+            if (!line.isEmpty() && textPaint.measureText(longer) > width) {
+                lines.add(line);
+                line = word;
+            } else {
+                line = longer;
+            }
+        }
+        if (!line.isEmpty()) {
+            lines.add(line);
+        }
+        return lines;
     }
 
     /** Shortens a name until it fits in {@code width} pixels of the verb font. */

@@ -60,6 +60,10 @@
   .upload input { display: none; }
   .upload span { display: block; text-align: center; background: var(--accent); color: var(--accent-ink); font-weight: 600; border-radius: 10px; padding: 12px; cursor: pointer; }
   .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  .status { font-size: 15px; margin: 12px 0 0; }
+  .status.bad { color: var(--danger); }
+  progress { display: block; width: 100%; height: 8px; margin-top: 12px; accent-color: var(--accent); }
+  #permission button { width: 100%; margin-top: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 600; }
   #toast {
     position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%);
     background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 14px;
@@ -95,6 +99,20 @@
     <div class="grid" id="backgrounds"></div>
     <label class="upload"><input type="file" id="files" accept="image/*" multiple><span>Upload images</span></label>
     <p class="hint">Shown in name order, changing every 5 minutes. Pixel art stays sharp; scenes of about 320×144 fit best.</p>
+  </section>
+
+  <section>
+    <h2>Update the launcher</h2>
+    <p class="empty" id="version"></p>
+    <div id="permission" hidden>
+      <p class="hint">First, the TV has to allow the launcher to install updates. This is needed once.</p>
+      <button type="button" id="allowButton">Open the setting on the TV</button>
+      <p class="hint">On the TV, turn on Minimal TV Launcher ("Allow from this source"), then press Back.</p>
+    </div>
+    <label class="upload"><input type="file" id="apk"><span>Choose the new APK</span></label>
+    <progress id="progress" max="1" value="0" hidden></progress>
+    <p class="status" id="updateStatus" hidden></p>
+    <p class="hint">Download the new MinimalTVLauncher.apk to this phone, then choose it here. The TV asks before installing; keep it on the home screen.</p>
   </section>
 </main>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -260,10 +278,115 @@ $("files").onchange = async (e) => {
   toast(files.length === 1 ? "Uploaded" : "Uploaded " + files.length + " images");
 };
 
+// ---- Updating the launcher ----
+
+let update = null;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function updateStatus(text, bad) {
+  const s = $("updateStatus");
+  s.textContent = text;
+  s.hidden = !text;
+  s.classList.toggle("bad", !!bad);
+}
+
+function renderUpdate() {
+  $("version").textContent = "On the TV now: version " + update.version;
+  $("permission").hidden = update.allowed;
+}
+
+async function loadUpdate() {
+  update = await api("GET", "/api/update");
+  renderUpdate();
+}
+
+$("allowButton").onclick = async () => {
+  try {
+    update = await api("POST", "/api/update/permission");
+    toast("Opened on the TV");
+    for (let i = 0; i < 90 && !update.allowed; i++) {   // up to 3 minutes
+      await wait(2000);
+      update = await api("GET", "/api/update");
+    }
+    renderUpdate();
+    if (update.allowed) {
+      updateStatus("");
+      toast("Allowed. Now choose the APK.");
+    }
+  } catch (e) {
+    toast("Couldn't reach the TV");
+  }
+};
+
+// Sends the file with progress (fetch can't report upload progress).
+function send(file) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/update");
+    xhr.setRequestHeader("Content-Type", "application/vnd.android.package-archive");
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) $("progress").value = e.loaded / e.total; };
+    xhr.onload = () => (xhr.status === 200 ? resolve() : reject(new Error(xhr.status === 409 ? "permission" : xhr.responseText || "Upload failed")));
+    xhr.onerror = () => reject(new Error("The connection to the TV dropped"));
+    xhr.send(file);
+  });
+}
+
+$("apk").onchange = async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  if (!/\.apk$/i.test(file.name)) {
+    updateStatus("That isn't an APK file. Choose MinimalTVLauncher.apk.", true);
+    return;
+  }
+  const before = update ? update.started : 0;
+  $("progress").hidden = false;
+  $("progress").value = 0;
+  updateStatus("Sending to the TV…");
+  try {
+    await send(file);
+  } catch (err) {
+    $("progress").hidden = true;
+    if (err.message === "permission") {
+      await loadUpdate();
+      updateStatus("First allow updates on the TV (above), then choose the APK again.", true);
+    } else {
+      updateStatus("Couldn't send it: " + err.message, true);
+    }
+    return;
+  }
+  $("progress").hidden = true;
+  updateStatus("On the TV, press Install.");
+  // Follow along: the TV asks, installs, and the launcher restarts with the new version.
+  for (let i = 0; i < 150; i++) {   // up to 5 minutes
+    await wait(2000);
+    try {
+      const u = await api("GET", "/api/update");
+      if (u.started !== before) {   // the launcher restarted: the update is in
+        update = u;
+        renderUpdate();
+        updateStatus("Updated to version " + u.version + ".");
+        state = await api("GET", "/api/state");
+        render();
+        return;
+      }
+      if (u.state === "failed") {
+        updateStatus("Not installed: " + (u.message || "the TV refused it") + ".", true);
+        return;
+      }
+      if (u.state === "confirm") updateStatus("On the TV, press Install.");
+    } catch (err) {
+      updateStatus("Installing… the launcher restarts in a moment.");
+    }
+  }
+  updateStatus("No answer from the TV. Check it's on the home screen, then try again.", true);
+};
+
 (async () => {
   try {
     state = await api("GET", "/api/state");
     render();
+    await loadUpdate();
   } catch (e) {
     document.querySelector("main").insertAdjacentHTML("beforeend",
       '<section><p class="empty">Can\'t reach the TV. Is the launcher running?</p></section>');

@@ -1,5 +1,6 @@
 package com.minimal.tvlauncher;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Typeface;
@@ -338,6 +339,16 @@ class ApartmentTheme implements LauncherTheme {
             @Override
             public void run() {
                 showHolidaysMenu();
+            }
+        });
+        addMenuItem("Screensaver", new Runnable() {
+            @Override
+            public void run() {
+                // Where the TV's screensaver is chosen; "Apartment" is this launcher's.
+                closeMenu();
+                if (!Apps.start(activity, new Intent("android.settings.DREAM_SETTINGS"))) {
+                    Apps.openSettings(activity);
+                }
             }
         });
         addMenuItem("Change launcher", new Runnable() {

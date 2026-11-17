@@ -20,13 +20,20 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/** The launcher dressed as the VGA Secret of Monkey Island interface. */
+/**
+ * The launcher dressed as the VGA Secret of Monkey Island interface. On Latvia's red days
+ * someone in the scene says something about the holiday, in the game's style.
+ */
 class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
 
     private static final String[] BACKGROUND_FILES = {"background.jpg", "background.png", "background.webp"};
     private static final String[] IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"};
     private static final String BACKGROUNDS_DIR = "backgrounds";
     private static final long CROSSFADE_MS = 1500;
+    // Holiday lines: said when the home screen appears, then again every few minutes.
+    private static final long SPEECH_SHOWN_MS = 15000;
+    private static final long SPEECH_EVERY_MS = 4 * 60 * 1000;
+    private static final int SPEECH_COLOR = 0xFFFFFFFF;   // the hero speaks in white
 
     // Verb ids. Verbs fill the 3x3 grid left to right, top to bottom, in the order added below.
     private static final int OPEN = 0;
@@ -49,11 +56,34 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
     private long backgroundIntervalMs;
     private int screenWidth;
     private SharedPreferences prefs;
+    private int speechLine;
 
     private final Runnable rotateBackground = new Runnable() {
         @Override
         public void run() {
             updateBackground(true);
+        }
+    };
+
+    // Says the next of today's holiday lines for a while, then waits to say another.
+    private final Runnable speak = new Runnable() {
+        @Override
+        public void run() {
+            String[] lines = holidayLines();
+            if (lines == null) {
+                scumm.setSpeech(null, 0);
+                return;
+            }
+            scumm.setSpeech(lines[speechLine++ % lines.length], SPEECH_COLOR);
+            handler.postDelayed(hush, SPEECH_SHOWN_MS);
+            handler.postDelayed(this, SPEECH_EVERY_MS);
+        }
+    };
+
+    private final Runnable hush = new Runnable() {
+        @Override
+        public void run() {
+            scumm.setSpeech(null, 0);
         }
     };
 
@@ -115,11 +145,16 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
     public void onResume() {
         updateBackground(false);
         scumm.requestFocus();
+        handler.removeCallbacks(speak);
+        handler.removeCallbacks(hush);
+        speak.run();
     }
 
     @Override
     public void onPause() {
         handler.removeCallbacks(rotateBackground);
+        handler.removeCallbacks(speak);
+        handler.removeCallbacks(hush);
     }
 
     /** Images were added or removed from the phone: show the current one again. */
@@ -151,6 +186,74 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
     @Override
     public void onDestroy() {
         handler.removeCallbacks(rotateBackground);
+        handler.removeCallbacks(speak);
+        handler.removeCallbacks(hush);
+    }
+
+    // ---- Holidays ----
+
+    // Today's lines, or null on an ordinary day (or with holidays turned off in the
+    // Apartment launcher's Holidays menu).
+    private String[] holidayLines() {
+        if (!activity.getSharedPreferences("launcher", MainActivity.MODE_PRIVATE).getBoolean("holidays", true)) {
+            return null;
+        }
+        Holidays.Day day = Holidays.today();
+        return day == null ? null : lines(day.id);
+    }
+
+    static String[] lines(String id) {
+        switch (id) {
+            case "new_year":
+                return new String[] {"A new year! This is the one where I become a mighty pirate.",
+                        "Was that a firework, or is LeChuck's ship blowing up again?"};
+            case "good_friday":
+                return new String[] {"Lielā Piektdiena. Even pirates take the day off.",
+                        "I found a pussy willow. It's soft, fluffy and completely useless. I'll take it."};
+            case "easter":
+                return new String[] {"Priecīgas Lieldienas! I've got an egg dyed in onion skins. Fancy an egg fight?",
+                        "My egg is harder than your head! ...Hm. That came out wrong.",
+                        "Look behind you, a three-headed Easter bunny!"};
+            case "easter_monday":
+                return new String[] {"Otrās Lieldienas. Swing high today: the higher you swing, the fewer mosquitoes in summer.",
+                        "You crack eggs like a dairy farmer."};
+            case "may_day":
+                return new String[] {"Darba svētki. A pirate's work is never done. Except today.",
+                        "Labour Day? I'd rather swab the poop deck tomorrow."};
+            case "independence":
+                return new String[] {"4. maijs. Time to lay a white tablecloth.",
+                        "A white tablecloth, a feast and not one cannibal in sight. Daudz laimes, Latvija!"};
+            case "mothers_day":
+                return new String[] {"Happy Mother's Day! I'll pick some flowers. Just not the yellow ones.",
+                        "I should call my mother. She still thinks I'm a famous pirate."};
+            case "pentecost":
+                return new String[] {"Vasarsvētki. Someone's decorated the door with birch branches.",
+                        "Birch leaves everywhere. Very festive. Very leafy."};
+            case "ligo":
+                return new String[] {"It's Jāņi. I should find some cheese and a wreath.",
+                        "Līgo! I'm off to find the fern flower. It's right next to the three-headed monkey.",
+                        "Jāņu siers with caraway seeds? I'll trade you a rubber chicken with a pulley in the middle."};
+            case "jani":
+                return new String[] {"Priecīgus Jāņus! Don't jump over the bonfire in a pirate hat.",
+                        "I stayed up all night waiting for the sunrise. I can hold my breath for ten minutes, too."};
+            case "proclamation":
+                return new String[] {"Daudz laimes, Latvija! A candle in every window tonight.",
+                        "18. novembris. Even the ghost pirates are wearing carmine and white."};
+            case "christmas_eve":
+                return new String[] {"Ziemassvētku vakars. Time to drag the yule log around the house.",
+                        "Look behind you, a three-headed Christmas tree!"};
+            case "christmas":
+                return new String[] {"Priecīgus Ziemassvētkus! Did anyone get me a grog?",
+                        "Look behind you, a three-headed Christmas tree!"};
+            case "second_christmas":
+                return new String[] {"Otrie Ziemassvētki. I couldn't eat another piparkūka. Well, maybe one.",
+                        "I got a sword for Christmas. It's mightier than the pen. I checked."};
+            case "old_year":
+                return new String[] {"Vecgada vakars. Time to pour the tin and see the future.",
+                        "I see... a ship. And a monkey. Mostly a monkey."};
+            default:
+                return null;
+        }
     }
 
     // ---- Verbs ----

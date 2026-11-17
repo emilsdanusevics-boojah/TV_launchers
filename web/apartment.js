@@ -1344,12 +1344,45 @@ function makeCozy() {
   renderer.toneMappingExposure = 0.95;
 }
 
-window.renderSetup = ({ when, code, width, height, view, cozy }) => {
+// Winter: snow lying on everything outdoors that faces up (the terrace decking, the
+// planters, the railing, the chairs), worked into each material's shader. Indoors stays as
+// it is: anything within the building's footprint gets none.
+function makeWinter() {
+  const seen = new Set();
+  root.traverse(o => {
+    const m = o.material;
+    if (!o.isMesh || !m || seen.has(m) || m.transparent || !m.isMeshStandardMaterial) return;
+    seen.add(m);
+    m.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vSnowPos;\nvarying vec3 vSnowNormal;")
+        .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvSnowPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvSnowNormal = normalize(mat3(modelMatrix) * objectNormal);");
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <common>", `#include <common>
+varying vec3 vSnowPos;
+varying vec3 vSnowNormal;
+float snowCover() {
+  if (vSnowPos.x > -0.2 && vSnowPos.x < 13.2 && vSnowPos.z > -0.2 && vSnowPos.z < 5.35) return 0.0;
+  float grain = fract(sin(dot(floor(vSnowPos.xz * 60.0), vec2(12.9898, 78.233))) * 43758.5453);
+  return smoothstep(0.45, 0.8, normalize(vSnowNormal).y) * (0.88 + 0.12 * grain);
+}`)
+        .replace("#include <color_fragment>", "#include <color_fragment>\nfloat snow = snowCover() * mix(0.72, 1.0, smoothstep(0.05, 0.35, dot(diffuseColor.rgb, vec3(0.333))));\n" +
+          "diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.94, 0.97), snow);   // the deck's grooves show through a little")
+        .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.85, snow);")
+        .replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\nmetalnessFactor = mix(metalnessFactor, 0.0, snow);");
+    };
+    m.customProgramCacheKey = () => "winter";
+    m.needsUpdate = true;
+  });
+}
+
+window.renderSetup = ({ when, code, width, height, view, cozy, winter }) => {
   if (view) Object.assign(VIEW, view);   // for measuring
   window.launcherNow = when;
   weather = { ...weather, code };
   applyAtmosphere();
   if (cozy) makeCozy();
+  if (winter) makeWinter();
   // Nothing moves but the camera, so the shadows are drawn once.
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.needsUpdate = true;
