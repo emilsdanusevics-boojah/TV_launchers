@@ -59,6 +59,19 @@ final class Holidays {
             return d;
         }
 
+        /** The accent colour, lightened if needed so a greeting in it reads on a dark picture. */
+        int textColor() {
+            int r = (accent >> 16) & 255, g = (accent >> 8) & 255, b = accent & 255;
+            if (0.2126 * r + 0.7152 * g + 0.0722 * b > 150) {
+                return accent;
+            }
+            return 0xFF000000 | mix(r) << 16 | mix(g) << 8 | mix(b);
+        }
+
+        private static int mix(int c) {
+            return c + (255 - c) * 45 / 100;
+        }
+
         /** e.g. "24 Jun". */
         String date() {
             return dayOfMonth + " " + MONTHS[month];

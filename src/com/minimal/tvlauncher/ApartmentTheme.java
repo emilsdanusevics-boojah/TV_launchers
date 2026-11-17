@@ -387,7 +387,7 @@ class ApartmentTheme implements LauncherTheme {
             holidayLine.setVisibility(View.GONE);
         } else {
             holidayLine.setText(preview != null ? day.greeting + "  ·  preview" : day.greeting);
-            holidayLine.setTextColor(day.accent);
+            holidayLine.setTextColor(day.textColor());
             holidayLine.setVisibility(View.VISIBLE);
         }
         accent = day != null ? day.accent : ACCENT;

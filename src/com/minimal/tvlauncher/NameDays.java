@@ -7,7 +7,6 @@ import java.io.InputStreamReader;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.TimeZone;
 
 /**
  * Latvian name days (vārda dienas): whose name day it is today, from the traditional
@@ -22,7 +21,7 @@ final class NameDays {
 
     /** e.g. "Mārtiņš, Mārcis, Markuss, Marks" on 10 November; null if nobody's. */
     static String today(Context context) {
-        Calendar now = Calendar.getInstance(TimeZone.getTimeZone("Europe/Riga"));
+        Calendar now = Calendar.getInstance();   // the TV's own time zone, like the date shown above it
         String key = String.format(java.util.Locale.ROOT, "%02d-%02d", now.get(Calendar.MONTH) + 1, now.get(Calendar.DAY_OF_MONTH));
         return load(context).get(key);
     }

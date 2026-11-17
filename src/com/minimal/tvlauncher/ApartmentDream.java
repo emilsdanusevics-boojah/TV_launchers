@@ -114,7 +114,7 @@ public class ApartmentDream extends DreamService {
         Holidays.Day day = getSharedPreferences("launcher", MODE_PRIVATE).getBoolean("holidays", true) ? Holidays.today() : null;
         orbit.setHoliday(day);
         greeting.setText(day != null ? day.greeting : "");
-        greeting.setTextColor(day != null ? day.accent : 0xFFD4A464);
+        greeting.setTextColor(day != null ? day.textColor() : 0xFFD4A464);
         greeting.setVisibility(day != null ? View.VISIBLE : View.GONE);
         orbit.onResume();
         tick.run();

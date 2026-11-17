@@ -592,7 +592,7 @@ class PhotosTheme implements LauncherTheme {
         holidayLine.setVisibility(day == null ? View.GONE : View.VISIBLE);
         if (day != null) {
             holidayLine.setText(day.greeting);
-            holidayLine.setTextColor(day.accent);
+            holidayLine.setTextColor(day.textColor());
         }
         accent = day != null ? day.accent : ACCENT;
         ink = day != null ? day.ink : ACCENT_INK;
