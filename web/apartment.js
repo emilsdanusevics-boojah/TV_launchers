@@ -1378,11 +1378,29 @@ float snowCover() {
    occlusion (soft shading where surfaces meet) and a glow around bright lights. The sky is
    left out: a second, plain pass marks what's solid, so the app can show its live sky
    through the windows. */
+// The camera loops, t from 0 to 1 once round: where the camera is and what it looks at.
+const ROOM_LOOPS = {
+  // From the bed corner, past the desk and the lamps, towards the terrace door.
+  1: (t) => {
+    const a = 2 * Math.PI * t;
+    return { pos: [4.3 + 0.15 * Math.cos(a), 1.58 + 0.04 * Math.sin(2 * a), 2.05 + 0.22 * Math.sin(a)],
+      target: [0.9, 0.95, 1.45 + 0.45 * Math.sin(a + 0.6)] };
+  },
+  // From beside the terrace door, towards the desk, its lamp and the slatted wall.
+  2: (t) => {
+    const a = 2 * Math.PI * t;
+    return { pos: [1.25 + 0.18 * Math.cos(a), 1.55 + 0.04 * Math.sin(2 * a), 2.35 + 0.2 * Math.sin(a)],
+      target: [3.9, 1.05, 0.55 + 0.35 * Math.sin(a + 0.8)] };
+  },
+};
+// Loop 2 looks straight at a lamp: a little less exposure keeps it from glaring.
+const ROOM_EXPOSURE = { 1: 1, 2: 0.82 };
+let roomLoop = 1;
 const ROOM = { fov: 56 };
 function roomCamera(t) {
-  const a = 2 * Math.PI * t;
-  camera.position.set(4.3 + 0.15 * Math.cos(a), 1.58 + 0.04 * Math.sin(2 * a), 2.05 + 0.22 * Math.sin(a));
-  camera.lookAt(0.9, 0.95, 1.45 + 0.45 * Math.sin(a + 0.6));
+  const { pos, target } = ROOM_LOOPS[roomLoop](t);
+  camera.position.set(...pos);
+  camera.lookAt(...target);
 }
 
 let composer = null, maskCanvas = null, mask2d = null;
@@ -1407,6 +1425,7 @@ function setupRoom(width, height) {
   const evening = renderer.toneMappingExposure < 1 && hemi.intensity < 0.5;
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(width, height), evening ? 0.45 : 0.2, 0.55, evening ? 0.9 : 1.4));
   if (!evening) renderer.toneMappingExposure = 0.72;   // white walls in daylight, without glare
+  renderer.toneMappingExposure *= ROOM_EXPOSURE[roomLoop];
   composer.addPass(new OutputPass());
   // The solid-parts pass: everything white and unlit; window glass left out, lace
   // curtains as see-through as they are.
@@ -1459,10 +1478,18 @@ function renderRoom(t, ow, oh) {
 }
 /** One frame of the room loop, t from 0 to 1, as base64 RGBA (not premultiplied). */
 window.renderRoomFrame = (t, ow, oh) => renderRoom(t, ow, oh);
+/** For choosing camera paths: one frame from pos looking at target. */
+window.renderView = (pos, target, ow, oh) => {
+  ROOM_LOOPS.view = () => ({ pos, target });
+  const was = roomLoop;
+  roomLoop = "view";
+  try { return renderRoom(0, ow, oh); } finally { roomLoop = was; }
+};
 
 /** Lighting for one video: when (ISO time, sets the sun), weather code, evening lamps
- *  (cozy), snow outside (winter), and the frame size. */
-window.renderSetup = ({ when, code, width, height, cozy, winter }) => {
+ *  (cozy), snow outside (winter), which camera loop, and the frame size. */
+window.renderSetup = ({ when, code, width, height, cozy, winter, loop }) => {
+  roomLoop = loop || 1;
   window.launcherNow = when;
   weather = { ...weather, code };
   applyAtmosphere();

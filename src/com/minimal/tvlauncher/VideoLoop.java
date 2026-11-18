@@ -35,6 +35,8 @@ final class VideoLoop implements Runnable {
     private volatile boolean running = true;
     private final Object lock = new Object();
     private long wantedUs = Long.MIN_VALUE;
+    private volatile Runnable onFirstFrame;
+    private boolean shownOne;
 
     /**
      * Opens the video at the keyframe at or before {@code atUs} (0 or more). Frames before
@@ -73,6 +75,11 @@ final class VideoLoop implements Runnable {
 
         thread = new Thread(this, TAG);
         thread.start();
+    }
+
+    /** Runs (on the decoder's thread) once the first frame has been handed over. */
+    void setOnFirstFrame(Runnable r) {
+        onFirstFrame = r;
     }
 
     /** Hands over the latest frame due at or before this time. */
@@ -130,6 +137,13 @@ final class VideoLoop implements Runnable {
                     }
                 }
                 codec.releaseOutputBuffer(out, show && running);
+                if (show && running && !shownOne) {
+                    shownOne = true;
+                    Runnable r = onFirstFrame;
+                    if (r != null) {
+                        r.run();
+                    }
+                }
             }
         } catch (Exception e) {
             Log.w(TAG, "video stopped", e);

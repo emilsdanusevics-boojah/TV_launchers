@@ -1,0 +1,199 @@
+<!doctype html>
+<!--
+  The Fireplace launcher's picture: a brick fireplace with logs, flames, glowing embers and
+  rising sparks, and the fire's flicker on the bricks. Drawn by one shader and rendered by
+  web/render_fireplace.js into a seamless 20-second loop (every movement repeats a whole
+  number of times in 20 seconds; the flames' upward flow uses two staggered layers that
+  hand over to each other, so nothing jumps).
+-->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000}canvas{display:block}</style></head>
+<body><canvas id="c" width="1280" height="720"></canvas>
+<script>
+const LOOP = 20.0;
+const FRAG = `
+precision highp float;
+uniform float uT;          // seconds, 0 to LOOP
+uniform vec2 uRes;
+const float LOOP = ${LOOP.toFixed(1)};
+const float PI = 3.14159265;
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p) {
+  float v = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; }
+  return v;
+}
+// A loop-periodic wobble: sines with whole numbers of cycles per loop.
+float wave(float k, float phase) { return sin(2.0 * PI * k * uT / LOOP + phase); }
+
+// Turbulence flowing upwards, seamless over the loop: two layers, each scrolling for one
+// 2-second cycle then starting over, faded so each restarts while it's invisible.
+float flow(vec2 p, float speed) {
+  float cyc = 2.0;
+  float pa = fract(uT / cyc), pb = fract(uT / cyc + 0.5);
+  float wa = 1.0 - abs(1.0 - 2.0 * pa);
+  float na = fbm(p + vec2(0.0, -pa * speed * cyc));
+  float nb = fbm(p + vec2(13.7, -pb * speed * cyc) + vec2(0.0, 5.3));
+  float n = mix(nb, na, wa);
+  return (n - 0.5) * (1.0 + 0.35 * (1.0 - abs(wa - 0.5) * 2.0)) + 0.5;   // keep the contrast through the blend
+}
+
+// Thin glowing cracks in the bark, here and there.
+float cracks(vec2 p, float seed) {
+  float n = noise(vec2(p.x * 26.0, p.y * 20.0) + seed);
+  float line = smoothstep(0.86, 0.97, 1.0 - abs(2.0 * n - 1.0));
+  return line * smoothstep(0.45, 0.7, noise(p * 7.0 + seed + 3.0));
+}
+
+float segDist(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a, ba = b - a;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba * h);
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uRes;
+  float aspect = uRes.x / uRes.y;
+  vec2 p = vec2(uv.x * aspect, uv.y);
+  float cx = aspect * 0.5;
+  vec2 fireAt = vec2(cx, 0.3);
+  float flicker = 0.86 + 0.06 * wave(7.0, 0.3) + 0.04 * wave(13.0, 1.7) + 0.03 * wave(29.0, 4.1);
+
+  // The opening of the fireplace.
+  float ow = 0.62, ob = 0.1, ot = 0.72;
+  float arch = ot + 0.07 * sqrt(max(0.0, 1.0 - pow((p.x - cx) / ow, 2.0)));
+  bool inside = abs(p.x - cx) < ow && p.y > ob && p.y < arch;
+
+  vec3 col;
+  float dl = length((p - fireAt) * vec2(0.75, 1.0));
+  float light = flicker * (0.95 / (1.0 + dl * dl * 5.0));
+  if (!inside) {
+    // Bricks around it, lit warmly by the fire; a dark wooden mantel above.
+    vec2 bsz = vec2(0.11, 0.045);
+    vec2 bp = p / bsz;
+    bp.x += 0.5 * mod(floor(bp.y), 2.0);
+    vec2 cell = floor(bp), f = fract(bp);
+    float mortar = smoothstep(0.0, 0.06, min(f.x, 1.0 - f.x) * bsz.x / bsz.y) * smoothstep(0.0, 0.08, min(f.y, 1.0 - f.y));
+    float h = hash(cell);
+    vec3 brick = mix(vec3(0.42, 0.17, 0.11), vec3(0.55, 0.27, 0.16), h) * (0.8 + 0.4 * noise(p * 40.0));
+    col = mix(vec3(0.16, 0.14, 0.12), brick, mortar);
+    float soot = smoothstep(0.2, 0.0, abs(p.x - cx) - ow) * smoothstep(0.0, 0.05, p.y - arch) * smoothstep(0.3, 0.0, p.y - arch);
+    col *= 1.0 - 0.6 * soot;
+    if (p.y > 0.86 && p.y < 0.93) {
+      float grain = noise(vec2(p.x * 3.0, p.y * 90.0));
+      col = mix(vec3(0.12, 0.07, 0.04), vec3(0.2, 0.12, 0.07), grain);
+      col *= p.y > 0.925 ? 1.4 : 1.0;
+    }
+    if (p.y < ob) {   // hearth stone
+      col = vec3(0.17, 0.15, 0.14) * (0.8 + 0.3 * noise(p * 25.0));
+      col *= 0.7 + 0.3 * smoothstep(0.0, ob, p.y);
+    }
+    col *= light * vec3(1.45, 0.95, 0.6) + vec3(0.02, 0.02, 0.03);
+  } else {
+    // The sooty inside, glowing near the fire.
+    col = vec3(0.03, 0.022, 0.02) + vec3(0.5, 0.18, 0.05) * light * 0.3 * (0.7 + 0.6 * noise(p * 12.0));
+  }
+
+  float r = 0.055;
+  // The back log, lying across.
+  float dBack = segDist(p, vec2(cx - 0.42, 0.17), vec2(cx + 0.42, 0.185));
+  if (inside && dBack < r) {
+    float bark = noise(vec2(p.x * 55.0, p.y * 16.0)) * 0.6 + noise(p * 130.0) * 0.4;
+    vec3 wood = mix(vec3(0.06, 0.035, 0.02), vec3(0.18, 0.1, 0.05), bark) * (1.2 - dBack / r * 0.6);
+    float crack = cracks(p, 2.0) * (0.6 + 0.4 * flow(p * 9.0, 0.3));
+    wood += vec3(1.0, 0.32, 0.05) * crack * flicker * 1.2;
+    col = mix(col, wood, smoothstep(r, r * 0.85, dBack));
+  }
+  // The glowing bed of embers under the logs.
+  if (inside && p.y < 0.19) {
+    float bed = smoothstep(0.19, 0.12, p.y) * smoothstep(ow * 0.9, ow * 0.5, abs(p.x - cx));
+    float sp = smoothstep(0.42, 0.9, noise(p * vec2(55.0, 70.0)) * (0.7 + 0.5 * flow(p * 14.0, 0.15)));
+    col += vec3(1.0, 0.33, 0.05) * bed * sp * 1.3 * flicker;
+  }
+
+  // Flames: separate tongues licking up from the logs.
+  if (inside) {
+    float x = (p.x - cx) / 0.5;
+    float h = (p.y - 0.19) / 0.48;
+    float sway = 0.04 * wave(3.0, 0.0) + 0.025 * wave(5.0, 2.0);
+    float warp = flow(vec2(x * 1.6, h * 1.2), 0.9) - 0.5;
+    float n = flow(vec2(x * 4.0 + warp * 1.2 + sway * h * 6.0, h * 1.8), 2.2);
+    float n2 = flow(vec2(x * 9.0 + 3.0 + warp, h * 3.5), 3.6);
+    float base = exp(-x * x * 1.6) * (1.0 - smoothstep(-0.1, 1.05, h));
+    float tongues = base * 1.1 + (n - 0.5) * 1.5 + (n2 - 0.5) * 0.5 - h * 0.6;
+    float fl = smoothstep(0.25, 0.85, tongues) * smoothstep(-0.08, 0.04, h);
+    vec3 fire = mix(vec3(0.55, 0.05, 0.0), vec3(1.0, 0.38, 0.04), smoothstep(0.0, 0.5, fl));
+    fire = mix(fire, vec3(1.0, 0.72, 0.3), smoothstep(0.55, 0.9, fl));
+    fire = mix(fire, vec3(1.0, 0.93, 0.75), smoothstep(0.92, 1.0, fl) * smoothstep(0.35, 0.0, h));
+    col += fire * fl * 1.15 * flicker;
+    col += vec3(0.55, 0.2, 0.04) * base * 0.12 * flicker;   // glow around the flames
+  }
+
+  // Two front logs, leaning in, dark against the flames with glowing cracks and a rim of
+  // firelight along their tops.
+  float d2 = segDist(p, vec2(cx - 0.44, 0.13), vec2(cx + 0.07, 0.25));
+  float d3 = segDist(p, vec2(cx + 0.43, 0.13), vec2(cx - 0.08, 0.245));
+  float dFront = min(d2, d3);
+  if (inside && dFront < r) {
+    float across = dFront / r;
+    float bark = noise(vec2(p.x * 60.0, p.y * 18.0)) * 0.6 + noise(p * 140.0) * 0.4;
+    vec3 wood = mix(vec3(0.05, 0.03, 0.018), vec3(0.16, 0.09, 0.045), bark) * (1.1 - across * 0.5);
+    float crack = cracks(p, 7.0) * (0.6 + 0.4 * flow(p * 9.0, 0.3));
+    wood += vec3(1.0, 0.3, 0.05) * crack * flicker * 1.3;
+    wood += vec3(0.9, 0.4, 0.1) * smoothstep(0.55, 1.0, across) * 0.35 * flicker;   // rim light
+    col = mix(col, wood, smoothstep(r, r * 0.85, dFront));
+  }
+
+  // Sparks drifting up out of the fire.
+  for (int i = 0; i < 16; i++) {
+    float fi = float(i);
+    float period = (i < 6) ? 2.5 : (i < 11 ? 4.0 : 5.0);
+    float life = fract(uT / period + hash(vec2(fi, 1.0)));
+    float sx = cx + (hash(vec2(fi, 2.0)) - 0.5) * 0.45 + sin(life * 7.0 + fi) * 0.025;
+    float sy = 0.24 + life * 0.55;
+    float bright = (1.0 - life) * (1.0 - life) * smoothstep(0.0, 0.08, life) * step(0.5, hash(vec2(fi, mod(floor(uT / period + hash(vec2(fi, 1.0))), LOOP / period))));   // which rounds a spark flies: the same every loop
+    float d = length((p - vec2(sx, sy)) * vec2(1.0, 0.7));
+    col += vec3(1.0, 0.6, 0.2) * bright * smoothstep(0.006, 0.0, d) * 1.6;
+  }
+
+  // A soft vignette, darker at the corners.
+  vec2 v = uv - 0.5;
+  col *= 1.0 - dot(v, v) * 1.1;
+  col = col / (1.0 + col * 0.25);   // gentle highlight roll-off
+  gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 1.25)), 1.0);
+}`;
+
+const gl = document.getElementById('c').getContext('webgl', { preserveDrawingBuffer: true });
+const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, 'attribute vec2 a; void main(){ gl_Position = vec4(a, 0.0, 1.0); }'));
+gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog, 'a');
+gl.enableVertexAttribArray(loc);
+gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+gl.uniform2f(gl.getUniformLocation(prog, 'uRes'), 1280, 720);
+
+window.LOOP = LOOP;
+/** The frame at t seconds, as base64 RGBA, top row first. */
+window.renderFire = (t) => {
+  gl.uniform1f(gl.getUniformLocation(prog, 'uT'), t);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  const px = new Uint8Array(1280 * 720 * 4);
+  gl.readPixels(0, 0, 1280, 720, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const flipped = new Uint8Array(px.length), row = 1280 * 4;
+  for (let y = 0; y < 720; y++) flipped.set(px.subarray((719 - y) * row, (720 - y) * row), y * row);
+  let bin = '';
+  for (let i = 0; i < flipped.length; i += 0x8000) bin += String.fromCharCode.apply(null, flipped.subarray(i, i + 0x8000));
+  return btoa(bin);
+};
+document.documentElement.classList.add('ready');
+</script></body></html>

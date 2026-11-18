@@ -28,8 +28,8 @@ import java.util.List;
  */
 public class MainActivity extends Activity implements NowPlaying.Listener, Remote.Listener {
 
-    static final String[] LAUNCHER_IDS = {"photos", "apartment", "monkey_island", "vinyl"};
-    static final String[] LAUNCHER_NAMES = {"Photos", "Apartment", "Monkey Island", "Vinyl"};
+    static final String[] LAUNCHER_IDS = {"photos", "apartment", "fireplace", "monkey_island", "vinyl"};
+    static final String[] LAUNCHER_NAMES = {"Photos", "Apartment", "Fireplace", "Monkey Island", "Vinyl"};
     static final String DEFAULT_LAUNCHER = "photos";
 
     private static final long PAUSED_COUNTS_AS_STOPPED_MS = 30000;
@@ -87,6 +87,8 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             base = new VinylTheme(this);
         } else if ("apartment".equals(launcher)) {
             base = new ApartmentTheme(this);
+        } else if ("fireplace".equals(launcher)) {
+            base = new FireplaceTheme(this);
         } else {
             base = new PhotosTheme(this);
         }

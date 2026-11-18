@@ -2,7 +2,7 @@
 // (see "the room view" in web/apartment.js). Run by web/build.sh; needs Node.js,
 // Playwright's Chromium and ffmpeg (with libx264).
 //
-//   node web/render_video.js <bundled render page dir> <day|evening|winter_day|winter_evening> <out.mp4> [frames]
+//   node web/render_video.js <bundled render page dir> <day|evening|day2|evening2|winter_day|winter_evening> <out.mp4> [frames]
 //
 // Each frame is drawn by the page (web/render.html + web/apartment.js) in headless
 // Chromium's software renderer at SUPERSAMPLE × the video size, scaled down, and packed as
@@ -25,6 +25,9 @@ const LIGHTING = {
   evening: { when: "2026-10-24T20:30:00Z", code: "clear", cozy: true },   // the orange lamps glowing
   winter_day: { when: "2026-06-21T10:00:00Z", code: "cloudy", winter: true },          // snow on the terrace, soft light
   winter_evening: { when: "2026-10-24T20:30:00Z", code: "clear", cozy: true, winter: true },
+  // The second camera loop (by the desk); join_loops.sh dissolves it into the first.
+  day2: { when: "2026-06-21T10:00:00Z", code: "partly", loop: 2 },
+  evening2: { when: "2026-10-24T20:30:00Z", code: "clear", cozy: true, loop: 2 },
 };
 
 const [, , pageDir, variant, outFile, framesArg] = process.argv;

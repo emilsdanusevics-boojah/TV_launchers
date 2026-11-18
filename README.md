@@ -1,6 +1,6 @@
 # Minimal TV Launcher
 
-A home screen for Android TV / Xiaomi TV with four looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
+A home screen for Android TV / Xiaomi TV with five looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
 
 ## Photos (default)
 
@@ -17,7 +17,7 @@ The name days are the traditional calendar list of the State Language Centre's c
 
 ## Apartment
 
-A cozy launcher: a slow loop at eye level through the apartment's living room, from the bed corner past the desk and the lamps towards the terrace door. The windows show a live picture of the sky over Brīvības iela 95, Riga:
+A cozy launcher: slow drifts at eye level through the apartment's living room, alternating between two views: from the bed corner past the desk and the lamps towards the terrace door, and from beside the terrace door towards the desk, its lamp and the slatted wall. They dissolve into each other every 75 seconds. The windows show a live picture of the sky over Brīvības iela 95, Riga:
 
 - **Sky colour** follows the real time of day and the cloud cover: blue by day, grey when overcast, orange and pink around the real sunrise and sunset, deep navy at night with the city's warm glow low down.
 - **The sun** glows from its real direction when it's in view, and **stars** come out on clear nights.
@@ -54,9 +54,9 @@ On top of it:
 - your apps as a row of names on a dark, see-through strip along the bottom
 - a settings button (gear) at the right end of the strip
 
-The room is a pre-rendered video, so the motion is perfectly smooth: the TV's video decoder plays it, with each frame shown for exactly two screen refreshes, and the loop (75 seconds at 30 frames per second) has no seam. It's rendered with soft shading where surfaces meet and a glow around the lamps. Each frame holds the room on the left and, at half size top right, a mask of the solid parts, so the app can show its live sky through the windows; it draws the sky itself with one small shader. It starts at once by showing a still of the first frame until the video is running, draws at 1280×720 (the TV scales it up), and if the TV runs at 50 Hz it asks for 60 Hz so the 30 frames per second play evenly. Everything pauses while another app is open.
+The room is a pre-rendered video, so the motion is perfectly smooth: the TV's video decoder plays it, with each frame shown for exactly two screen refreshes, and the loop (2½ minutes at 30 frames per second: one view, a dissolve, the other view, a dissolve) has no seam. It's rendered with soft shading where surfaces meet and a glow around the lamps. Each frame holds the room on the left and, at half size top right, a mask of the solid parts, so the app can show its live sky through the windows; it draws the sky itself with one small shader. It starts at once by showing a still of the first frame until the video is running, draws at 1280×720 (the TV scales it up), and if the TV runs at 50 Hz it asks for 60 Hz so the 30 frames per second play evenly. Everything pauses while another app is open.
 
-The videos live in `assets/apartment` (`room_day`, `room_evening`, and `room_winter_day` / `room_winter_evening` when present), each with a `.jpg` still of its first frame. The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`, which renders the videos again in a headless browser (about an hour and a half each; needs Node.js and ffmpeg). The lighting and camera code in `web/apartment.js` are kept. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
+The videos live in `assets/apartment` (`room_day`, `room_evening`, and `room_winter_day` / `room_winter_evening` when present), each with a `.jpg` still of its first frame. The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`, which renders the videos again in a headless browser (about an hour each; needs Node.js and ffmpeg). Each camera loop is rendered separately (`day`/`evening` for the first, `day2`/`evening2` for the second) and `web/join_loops.sh` dissolves them into one video. The lighting and camera code in `web/apartment.js` are kept. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
 
 - **Left/Right** moves along the apps. **OK** opens one; **long-press OK** opens its info page.
 - **Gear** (or **Menu** on the remote) opens a menu:
@@ -64,7 +64,7 @@ The videos live in `assets/apartment` (`room_day`, `room_evening`, and `room_win
   - **Edit apps**
   - **Holidays**, see above
   - **Screensaver**, opens the TV's screen saver settings (see below)
-  - **Change launcher**, where you can pick Photos, Apartment, Monkey Island or Vinyl
+  - **Change launcher**, where you can pick Photos, Apartment, Fireplace, Monkey Island or Vinyl
 - **Back** closes the menu.
 
 ### Screensaver
@@ -78,6 +78,14 @@ adb shell settings put secure screensaver_components com.minimal.tvlauncher/.Apa
 ## Live weather
 
 The current conditions and today's sunrise and sunset for Brīvības iela 95 come from [Open-Meteo](https://open-meteo.com/). It's free and needs no account or key. The launcher fetches them when it appears and every 15 minutes while it's on screen. Without internet, the sky keeps its last conditions and the weather line is hidden.
+
+## Fireplace
+
+A crackling fire fills the screen: a brick fireplace with logs, glowing embers, flames and sparks drifting up, the bricks lit by the fire's flicker. The clock sits dim in the top-left corner. The apps stay out of the way: press any button on the remote and the app strip appears along the bottom; it fades away again after 10 seconds without a press (Back hides it at once).
+
+**Sound** (in the gear menu, or Menu on the remote) plays a quiet crackling fire or gentle rain, or nothing (the default). It stops whenever another app is open.
+
+The fire is a pre-rendered, seamless 20-second loop played by the TV's video decoder (`web/fireplace.html` draws it; `node web/render_fireplace.js assets/fireplace/fireplace.mp4 assets/fireplace/fireplace.jpg` renders it). The sounds are synthesised, not recorded: `python3 web/make_sounds.py assets/fireplace` makes them as seamless 60-second loops.
 
 ## Monkey Island
 
