@@ -93,8 +93,8 @@ class ApartmentTheme implements LauncherTheme {
         root.addView(orbit, new FrameLayout.LayoutParams(-1, -1));
 
         // A soft shade behind the clock, from the top-left corner.
-        root.addView(PanelMenu.cornerShade(activity, 0xC01D1E20, 520),
-                new FrameLayout.LayoutParams(dp(520), dp(520), Gravity.TOP | Gravity.START));
+        root.addView(PanelMenu.cornerShade(activity, 0xE01D1E20, 580),   // dark enough for the brighter desk view
+                new FrameLayout.LayoutParams(dp(580), dp(580), Gravity.TOP | Gravity.START));
 
         // Clock, date, weather and any holiday greeting, in one block.
         LinearLayout clock = new LinearLayout(activity);
