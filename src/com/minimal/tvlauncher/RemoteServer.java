@@ -178,7 +178,7 @@ class RemoteServer extends Thread {
             if (req.streamLength <= 0 || req.streamLength > MAX_APK) {
                 throw new IOException("Too large");
             }
-            req.stream = in;
+            req.stream = new Bounded(in, req.streamLength);
         } else if (length != null) {
             int n = Integer.parseInt(length);
             if (n < 0 || n > MAX_UPLOAD) {
@@ -195,6 +195,52 @@ class RemoteServer extends Thread {
             }
         }
         return req;
+    }
+
+    private static void drain(InputStream in) {
+        byte[] buf = new byte[65536];
+        try {
+            while (in.read(buf) >= 0) {
+                // discard
+            }
+        } catch (IOException ignored) {
+            // The phone gave up; nothing more to read.
+        }
+    }
+
+    /** The request body only: reads end where the upload does. */
+    private static final class Bounded extends InputStream {
+        private final InputStream in;
+        private long left;
+
+        Bounded(InputStream in, long length) {
+            this.in = in;
+            this.left = length;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (left <= 0) {
+                return -1;
+            }
+            int b = in.read();
+            if (b >= 0) {
+                left--;
+            }
+            return b;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            if (left <= 0) {
+                return -1;
+            }
+            int n = in.read(b, off, (int) Math.min(len, left));
+            if (n > 0) {
+                left -= n;
+            }
+            return n;
+        }
     }
 
     private static void send(OutputStream out, int status, String type, byte[] body) throws IOException {
@@ -250,12 +296,30 @@ class RemoteServer extends Thread {
             Updater.openPermission(context);
             sendJson(out, updateState());
         } else if (key.equals("POST /api/update")) {
-            if (req.stream == null) {
-                send(out, 400, "text/plain", "No file".getBytes("UTF-8"));
-            } else if (!Updater.allowed(context)) {
-                send(out, 409, "text/plain", "Installing updates isn't allowed yet".getBytes("UTF-8"));
+            int status = 200;
+            String refusal = null;
+            try {
+                if (req.stream == null) {
+                    status = 400;
+                    refusal = "No file";
+                } else if (!Updater.allowed(context)) {
+                    status = 409;
+                    refusal = "Installing updates isn't allowed yet";
+                } else {
+                    Updater.install(context, req.stream, req.streamLength);
+                }
+            } catch (Exception e) {
+                status = 500;
+                refusal = "The TV couldn't take the file: " + e.getMessage();
+            }
+            if (refusal != null) {
+                // Take in the rest of the upload first: closing on the phone mid-send would
+                // only show it "connection dropped" instead of this answer.
+                if (req.stream != null) {
+                    drain(req.stream);
+                }
+                send(out, status, "text/plain", refusal.getBytes("UTF-8"));
             } else {
-                Updater.install(context, req.stream, req.streamLength);
                 sendJson(out, updateState());
             }
         } else {

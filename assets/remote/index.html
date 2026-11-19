@@ -340,7 +340,7 @@ function send(file) {
     xhr.setRequestHeader("Content-Type", "application/vnd.android.package-archive");
     xhr.upload.onprogress = (e) => { if (e.lengthComputable) $("progress").value = e.loaded / e.total; };
     xhr.onload = () => (xhr.status === 200 ? resolve() : reject(new Error(xhr.status === 409 ? "permission" : xhr.responseText || "Upload failed")));
-    xhr.onerror = () => reject(new Error("The connection to the TV dropped"));
+    xhr.onerror = () => reject(new Error("the connection to the TV dropped. Check the TV is on the home screen and try again"));
     xhr.send(file);
   });
 }
@@ -351,6 +351,18 @@ $("apk").onchange = async (e) => {
   if (!file) return;
   if (!/\.apk$/i.test(file.name)) {
     updateStatus("That isn't an APK file. Choose MinimalTVLauncher.apk.", true);
+    return;
+  }
+  // Make sure the TV will take it before sending a big file.
+  try {
+    await loadUpdate();
+  } catch (err) {
+    updateStatus("Can't reach the TV. Is it on, with the launcher on screen?", true);
+    return;
+  }
+  if (!update.allowed) {
+    updateStatus("First allow updates on the TV (above), then choose the APK again.", true);
+    $("permission").scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
   const before = update ? update.started : 0;
