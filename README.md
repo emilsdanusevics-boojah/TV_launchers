@@ -1,14 +1,19 @@
 # Minimal TV Launcher
 
-A home screen for Android TV / Xiaomi TV with five looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
+A home screen for Android TV / Xiaomi TV with six looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
 
 ## Automatic
 
 These run on their own, for every launcher. Each can be changed or turned off on the phone page (**Automatic**).
 
-- **Autopilot** picks the launcher for you: Photos by day, Fireplace after sunset and Monkey Island on red days (you choose which ones). It only switches when the home screen comes back or ambient mode starts, never while you're using it. If you choose a launcher yourself, Autopilot leaves it alone until the next change: from day to evening, evening to the next day, or onto a red day. Choose the same launcher in the same part of the day on two different days and Autopilot learns it: that becomes the launcher for that part of the day, and the TV says so.
+- **Autopilot** picks the launcher for you: Photos by day, Fireplace after sunset, Window on rainy or snowy evenings and Monkey Island on red days (you choose which ones). It only switches when the home screen comes back or ambient mode starts, never while you're using it. If you choose a launcher yourself, Autopilot leaves it alone until the next change: from day to evening, evening to the next day, or onto a red day. Choose the same launcher in the same part of the day on two different days and Autopilot learns it: that becomes the launcher for that part of the day, and the TV says so.
 - **Evening light (Day Arc)** follows the real sun over Riga. After sunset a warm, dim veil settles over the launcher, deeper after 23:00, and it lifts again at dawn. It's lighter on Fireplace and Apartment, which are evening scenes already.
 - **Bedtime** (off by default): from the chosen hour, once the TV is idle in ambient mode, the screen fades to black over ten minutes. After that the TV is allowed to go to sleep. Any button brings it back.
+- **Music over the fire**: when Spotify plays over the Fireplace or Window launcher, a small record turns in the bottom-right corner with the cover and the track, and the full Vinyl screen doesn't take over. You can switch back to the full screen on the phone page.
+- **Glance card on Photos**:
+  - **Mornings (05:00–11:00):** a "Today" card shows the temperature and how cold it feels, what to wear, when rain or snow starts or stops (with "take an umbrella"), and "Icy pavements likely" after wet weather turns freezing.
+  - **Evenings (18:00–02:00):** a "Tomorrow" card shows the 08:00 weather, the day's high, sunrise, a red day and tomorrow's name days.
+  - It uses Open-Meteo's hour-by-hour forecast (free, no key).
 - **Weather on Photos**: raindrops bead on the "glass" when it rains in Riga, snow drifts past when it snows, and frost creeps in from the corners below 0°. Holidays add their own touches: embers on Jāņi, gold sparkles at New Year, snow at Christmas, carmine and white petals on 4 May and 18 November, and blossom on spring holidays.
 
 ## Photos (default)
@@ -117,6 +122,19 @@ A crackling fire fills the screen: a brick fireplace with logs, glowing embers, 
 **Sound** (in the gear menu, or Menu on the remote) plays a quiet crackling fire or gentle rain, or nothing (the default). It stops whenever another app is open.
 
 The fire is a pre-rendered, seamless 20-second loop played by the TV's video decoder (`web/fireplace.html` draws it; `node web/render_fireplace.js assets/fireplace/fireplace.mp4 assets/fireplace/fireplace.jpg` renders it). The sounds are synthesised, not recorded: `python3 web/make_sounds.py assets/fireplace` makes them as seamless 60-second loops.
+
+## Window
+
+The view from a window in a dim room, matched to the weather outside, the time of day and the season:
+
+- **Raining:** rain beads and runs down the glass, with the city's lights blurred behind it.
+- **Winter evenings** (or snow, or below 0°): a candle flickers on the sill while snow falls past and frost creeps in at the corners of the panes.
+- **Other evenings:** the same candle on a clear summer night, the first stars over the rooftops.
+- **By day:** a weeping birch sways in the wind, with leaf shadows moving on the sill in summer. In winter the birch is bare and frosted and a few flakes drift down.
+
+The view changes on its own as the weather or the light changes. Like the Fireplace, the clock sits dim in the corner and any button brings up the app strip. **Sound** can play rain or a crackling fire.
+
+The views are seamless 20-second loops drawn by one shader (`web/window.html`) and rendered with `node web/render_window.js <0-4> scenes/window/<name>.mp4 assets/window/<name>.jpg`. Like the Apartment videos, they download from this repository the first time; the stills are built in.
 
 ## Monkey Island
 

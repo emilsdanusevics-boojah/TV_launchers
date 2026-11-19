@@ -152,6 +152,20 @@ class NowPlaying {
         update();
     }
 
+    /** The playing track's title, or "". */
+    String title() {
+        MediaMetadata m = controller == null ? null : controller.getMetadata();
+        String t = m == null ? null : m.getString(MediaMetadata.METADATA_KEY_TITLE);
+        return t == null ? "" : t;
+    }
+
+    /** The playing track's artist, or "". */
+    String artist() {
+        MediaMetadata m = controller == null ? null : controller.getMetadata();
+        String a = m == null ? null : m.getString(MediaMetadata.METADATA_KEY_ARTIST);
+        return a == null ? "" : a;
+    }
+
     private void update() {
         MediaMetadata metadata = controller == null ? null : controller.getMetadata();
         PlaybackState playback = controller == null ? null : controller.getPlaybackState();

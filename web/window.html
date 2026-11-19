@@ -1,0 +1,377 @@
+<!doctype html>
+<!--
+  The Window launcher's pictures: a window in a dim room, looking out, as seamless 20-second
+  loops rendered by web/render_window.js. One shader, five scenes (window.html?scene=N):
+    0 rain     rain running down the glass at night, the city's lights blurred behind it
+    1 snow     a candle on the sill, snow falling past the window at dusk, frost on the glass
+    2 candle   the same candle on a clear summer evening
+    3 summer   a birch tree in the wind on a bright day, leaf shadows moving on the sill
+    4 winter   the birch bare and frosted, a few flakes drifting, pale winter light
+  Every movement repeats a whole number of times per loop, so the loop has no seam: drops
+  and flakes fall with periods that divide 20 s, and noise moves around a circle.
+-->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000}canvas{display:block}</style></head>
+<body><canvas id="c" width="1280" height="720"></canvas>
+<script>
+const LOOP = 20.0;
+const SCENE = parseInt(new URLSearchParams(location.search).get('scene') || '0', 10);
+const FRAG = `
+precision highp float;
+uniform float uT;
+uniform vec2 uRes;
+const float LOOP = ${LOOP.toFixed(1)};
+const int SCENE = ${SCENE};
+const float PI = 3.14159265;
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p) {
+  float v = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; }
+  return v;
+}
+float wave(float k, float phase) { return sin(2.0 * PI * k * uT / LOOP + phase); }
+// Noise that drifts around a small circle once per loop: moves, never jumps.
+vec2 orbit(float r, float k) { float a = 2.0 * PI * k * uT / LOOP; return r * vec2(cos(a), sin(a)); }
+float segDist(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a, ba = b - a;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba * h);
+}
+
+// ---- What's outside, in window coordinates q (0..1 across the glass) ----
+
+vec3 cityNight(vec2 q) {
+  vec3 col = mix(vec3(0.02, 0.025, 0.06), vec3(0.07, 0.06, 0.10), smoothstep(0.9, 0.2, q.y));
+  // Blurred lights: windows, street lamps, a few cool ones.
+  for (int i = 0; i < 46; i++) {
+    float fi = float(i);
+    vec2 c = vec2(hash(vec2(fi, 3.1)), 0.05 + 0.55 * pow(hash(vec2(fi, 7.7)), 1.4));
+    float r = 0.025 + 0.05 * hash(vec2(fi, 1.3));
+    float warm = step(0.25, hash(vec2(fi, 9.2)));
+    vec3 lc = mix(vec3(0.45, 0.6, 1.0), vec3(1.0, 0.62, 0.28), warm) * (0.35 + 0.65 * hash(vec2(fi, 4.4)));
+    float tw = 0.85 + 0.15 * wave(1.0 + floor(hash(vec2(fi, 5.5)) * 3.0), fi);
+    float d = length((q - c) * vec2(1.6, 1.0));
+    col += lc * tw * (smoothstep(r, r * 0.6, d) * 0.55 + smoothstep(r * 2.6, 0.0, d) * 0.12);
+  }
+  return col;
+}
+
+vec3 duskRoofs(vec2 q, bool summer) {
+  vec3 top = summer ? vec3(0.10, 0.10, 0.28) : vec3(0.05, 0.08, 0.20);
+  vec3 hor = summer ? vec3(0.85, 0.45, 0.30) : vec3(0.28, 0.32, 0.55);
+  vec3 col = mix(hor, top, smoothstep(0.15, 0.95, q.y));
+  if (summer) {
+    for (int i = 0; i < 30; i++) {   // first stars
+      vec2 s = vec2(hash(vec2(float(i), 2.0)), 0.55 + 0.45 * hash(vec2(float(i), 8.0)));
+      col += vec3(0.9) * smoothstep(0.0025, 0.0, length((q - s) * vec2(1.6, 1.0))) * (0.5 + 0.5 * wave(2.0, float(i)));
+    }
+  }
+  // Rooftops and chimneys across the bottom, with a few lit windows.
+  float x = q.x * 9.0;
+  float cell = floor(x);
+  float h = 0.16 + 0.14 * hash(vec2(cell, 1.0));
+  float roof = h + 0.05 * (1.0 - abs(fract(x) - 0.5) * 2.0) * step(0.5, hash(vec2(cell, 2.0)));
+  float chimney = step(abs(fract(x) - 0.3), 0.04) * step(0.6, hash(vec2(cell, 3.0))) * 0.06;
+  if (q.y < roof + chimney) {
+    col = summer ? vec3(0.06, 0.05, 0.09) : vec3(0.04, 0.05, 0.09);
+    vec2 w = vec2(fract(x * 3.0), fract(q.y * 22.0));
+    float lit = step(0.72, hash(vec2(floor(x * 3.0), floor(q.y * 22.0))));
+    if (q.y < roof - 0.02 && w.x > 0.3 && w.x < 0.7 && w.y > 0.3 && w.y < 0.75) col += vec3(1.0, 0.7, 0.35) * lit * 0.8;
+    if (!summer) col += vec3(0.25, 0.28, 0.35) * smoothstep(0.012, 0.0, abs(q.y - roof - chimney + 0.006));   // snow on the roofs
+  }
+  return col;
+}
+
+// A birch: white trunk with dark streaks, drooping branches, long hanging twigs.
+vec2 bez(vec2 a, vec2 b, vec2 c, float t) { return mix(mix(a, b, t), mix(b, c, t), t); }
+
+vec4 birch(vec2 q, bool summer) {
+  vec4 o = vec4(0.0);
+  float tx = 0.16 + 0.015 * sin(q.y * 4.0);
+  float tw = 0.05 - q.y * 0.018;
+  float dt = q.x - tx;
+  if (abs(dt) < tw) {
+    float streak = step(0.7, noise(vec2(q.x * 14.0, q.y * 95.0))) * step(0.35, noise(vec2(q.y * 22.0, 4.0)));
+    float patch_ = step(0.82, noise(vec2(q.x * 10.0, q.y * 14.0)));
+    float marks = max(streak, patch_);
+    float shade = 0.62 + 0.38 * smoothstep(tw, -tw * 0.6, dt);
+    vec3 bark = mix(vec3(0.93, 0.92, 0.88), vec3(0.10, 0.09, 0.09), marks) * shade;
+    return vec4(bark, 1.0);
+  }
+  for (int b = 0; b < 6; b++) {
+    float fb = float(b);
+    float by = 0.5 + fb * 0.085;
+    float sway = 0.008 * wave(2.0, fb * 1.7) + 0.004 * wave(3.0, fb);
+    vec2 a = vec2(tx + 0.02, by);
+    vec2 e = vec2(0.5 + 0.45 * hash(vec2(fb, 1.0)), by - 0.04 - 0.12 * hash(vec2(fb, 2.0)) + sway);
+    vec2 m = vec2(mix(a.x, e.x, 0.45), max(a.y, e.y) + 0.06);
+    // Branch: a curve, thinning towards the tip.
+    float bd = 1.0, bt = 0.0;
+    for (int k = 0; k < 6; k++) {
+      float t0 = float(k) / 6.0, t1 = float(k + 1) / 6.0;
+      float d = segDist(q, bez(a, m, e, t0), bez(a, m, e, t1));
+      if (d < bd) { bd = d; bt = t0; }
+    }
+    if (bd < 0.007 * (1.0 - bt * 0.7)) return vec4(vec3(0.14, 0.12, 0.11), 1.0);
+    // Long twigs hanging from the branch, each swaying a little on its own.
+    for (int k = 0; k < 12; k++) {
+      float fk = float(k);
+      float t = 0.15 + 0.85 * (fk + hash(vec2(fb, fk + 20.0)) * 0.6) / 12.0;
+      vec2 root = bez(a, m, e, t);
+      float len = 0.10 + 0.22 * hash(vec2(fb, fk));
+      if (q.y > root.y + 0.01 || q.y < root.y - len - 0.03 || abs(q.x - root.x) > 0.06) continue;
+      float ang = 0.05 * wave(2.0 + mod(fk, 3.0), fb * 3.0 + fk) + 0.025 * wave(5.0, fk * 1.3);
+      vec2 mid = root + vec2(sin(ang) * len * 0.5 + 0.01, -len * 0.5);
+      vec2 tip = root + vec2(sin(ang * 1.8) * len, -len);
+      float dd = min(segDist(q, root, mid), segDist(q, mid, tip));
+      if (dd < 0.0015) o = vec4(vec3(0.17, 0.14, 0.12), 1.0);
+      if (summer) {
+        // Small leaves along the twig, alternating sides, each a slightly different green.
+        for (int j = 0; j < 7; j++) {
+          float fj = float(j);
+          float s = 0.12 + 0.86 * (fj + 0.5 * hash(vec2(fk + fb * 13.0, fj))) / 7.0;
+          vec2 at = s < 0.5 ? mix(root, mid, s * 2.0) : mix(mid, tip, s * 2.0 - 1.0);
+          float side = mod(fj, 2.0) * 2.0 - 1.0;
+          float flutter = 0.3 * wave(4.0 + mod(fj, 3.0), fj + fk * 2.0 + fb);
+          float la = side * 0.9 + flutter;
+          vec2 c = at + vec2(cos(la) * 0.006 * side, -0.004);
+          vec2 d = q - c;
+          vec2 r = vec2(cos(la) * d.x + sin(la) * d.y, -sin(la) * d.x + cos(la) * d.y);
+          float leaf = smoothstep(1.0, 0.75, length(r * vec2(1.0 / 0.0095, 1.0 / 0.0055)));
+          if (leaf > 0.5) {
+            float h = hash(vec2(fk * 7.0 + fb, fj));
+            vec3 g = mix(vec3(0.22, 0.42, 0.12), vec3(0.58, 0.78, 0.28), h);
+            g *= 0.8 + 0.4 * smoothstep(-0.006, 0.006, r.y);   // light from above
+            o = vec4(g, 1.0);
+          }
+        }
+      } else {
+        // Frost on the twigs, in beads.
+        float s = clamp(dot(q - root, tip - root) / dot(tip - root, tip - root), 0.0, 1.0);
+        if (dd < 0.003 && hash(vec2(floor(s * 45.0), fk + fb * 9.0)) > 0.5) o = vec4(vec3(0.86, 0.89, 0.94), 1.0);
+      }
+    }
+  }
+  return o;
+}
+
+vec3 daySky(vec2 q, bool summer) {
+  vec3 top = summer ? vec3(0.32, 0.55, 0.88) : vec3(0.62, 0.70, 0.80);
+  vec3 hor = summer ? vec3(0.78, 0.88, 0.96) : vec3(0.88, 0.89, 0.90);
+  vec3 col = mix(hor, top, smoothstep(0.0, 1.0, q.y));
+  float c = fbm(q * vec2(2.5, 4.0) + vec2(3.0, 1.0) + orbit(0.35, 1.0));
+  col = mix(col, vec3(1.0), smoothstep(0.5, 0.75, c) * (summer ? 0.75 : 0.45));
+  // Distant tree line / ground.
+  float line = 0.12 + 0.03 * fbm(vec2(q.x * 6.0, 1.0));
+  if (q.y < line) col = summer ? mix(vec3(0.18, 0.30, 0.14), vec3(0.28, 0.42, 0.18), noise(q * 40.0)) : mix(vec3(0.80, 0.82, 0.86), vec3(0.62, 0.64, 0.70), noise(q * 30.0));
+  return col;
+}
+
+// Falling snow, in layers; every flake's fall period divides the loop.
+float snow(vec2 q, float density) {
+  float s = 0.0;
+  for (int layer = 0; layer < 3; layer++) {
+    float fl = float(layer);
+    float period = layer == 0 ? 10.0 : (layer == 1 ? 5.0 : 4.0);
+    float scale = 14.0 + fl * 10.0;
+    vec2 p = q * vec2(scale * 1.78, scale);
+    p.y += uT / period * scale;          // whole cells per loop: seamless
+    p.x += 0.4 * wave(1.0 + fl, fl);     // a gentle sideways sway
+    vec2 id = floor(p), f = fract(p) - 0.5;
+    vec2 off = vec2(hash(id) - 0.5, hash(id + 7.0) - 0.5) * 0.6;
+    float r = (0.06 + 0.06 * hash(id + 3.0)) * (1.0 - fl * 0.15);
+    float on = step(1.0 - density, hash(id + 11.0));
+    s += on * smoothstep(r, r * 0.3, length(f - off)) * (0.55 + fl * 0.25);
+  }
+  return s;
+}
+
+// ---- Rain on the glass ----
+
+// Returns the offset the glass bends the view by (xy) and how "wet" it is here (z).
+vec3 rain(vec2 q) {
+  vec2 asp = vec2(1.78, 1.0);
+  vec3 r = vec3(0.0);
+  // Beads that appear and dry, on a grid.
+  vec2 g = q * vec2(26.0, 15.0);
+  vec2 id = floor(g), f = fract(g) - 0.5;
+  float life = fract(uT / 10.0 + hash(id));                     // a 10 s cycle, twice per loop
+  vec2 c = (vec2(hash(id + 1.3), hash(id + 2.1)) - 0.5) * 0.7;
+  float rad = (0.08 + 0.26 * pow(hash(id + 5.0), 2.0)) * smoothstep(0.0, 0.3, life) * smoothstep(1.0, 0.7, life)
+      * step(0.45, hash(id + 9.0));   // not every spot has a drop
+  vec2 d = (f - c);
+  float bead = rad > 0.01 ? smoothstep(rad, rad * 0.7, length(d)) : 0.0;
+  r.xy += bead * d * 0.9;
+  r.z = max(r.z, bead);
+  // Drops running down, each column on its own period (dividing the loop), with a trail.
+  for (int i = 0; i < 22; i++) {
+    float fi = float(i);
+    float period = i < 8 ? 2.5 : (i < 15 ? 4.0 : 5.0);
+    float k = uT / period + hash(vec2(fi, 4.0));
+    float round_ = mod(floor(k), LOOP / period);
+    float x = hash(vec2(fi, round_ + 1.0)) * 0.96 + 0.02;
+    float y = 1.15 - fract(k) * 1.35;
+    x += 0.006 * sin(y * 40.0 + fi);
+    vec2 p = (q - vec2(x, y)) * asp;
+    float size = 0.012 + 0.008 * hash(vec2(fi, round_));
+    float drop = smoothstep(size, size * 0.6, length(p * vec2(1.0, 0.8)));
+    r.xy += drop * p * 3.0;
+    r.z = max(r.z, drop);
+    float trail = smoothstep(0.004, 0.0, abs(q.x - x)) * step(y, q.y) * smoothstep(y + 0.35, y, q.y);
+    r.z = max(r.z, trail * 0.5);
+    // Little beads left in the trail.
+    vec2 tb = vec2(x, y + 0.03 + floor((q.y - y) * 30.0) / 30.0);
+    float tbd = smoothstep(0.005, 0.002, length((q - tb) * asp)) * step(y, q.y) * step(q.y, y + 0.3);
+    r.xy += tbd * (q - tb) * asp * 2.0;
+    r.z = max(r.z, tbd);
+  }
+  return r;
+}
+
+// ---- The candle ----
+
+vec3 candleLight() { return vec3(1.0, 0.62, 0.30) * (0.92 + 0.05 * wave(7.0, 0.0) + 0.03 * wave(13.0, 1.0)); }
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uRes;
+  float aspect = uRes.x / uRes.y;
+  bool night = SCENE <= 2;
+  bool hasCandle = SCENE == 1 || SCENE == 2;
+
+  // The window opening and its frame.
+  vec2 lo = vec2(0.16, 0.25), hi = vec2(0.84, 0.97);
+  vec2 q = (uv - lo) / (hi - lo);
+  float frameW = 0.03;
+  bool inOpening = q.x > 0.0 && q.x < 1.0 && q.y > 0.0 && q.y < 1.0;
+  float mx = abs(q.x - 0.5), ty = abs(q.y - 0.68);
+  bool bar = inOpening && (mx < 0.012 || ty < 0.012 * aspect * (hi.x - lo.x) / (hi.y - lo.y));
+
+  vec3 roomLight = hasCandle ? candleLight() : (night ? vec3(0.25, 0.22, 0.3) : (SCENE == 3 ? vec3(1.0, 0.95, 0.85) : vec3(0.85, 0.88, 0.95)));
+  vec2 candlePos = vec2(0.66, 0.205);
+  float candleDist = length((uv - candlePos) * vec2(aspect, 1.0));
+  float glow = hasCandle ? 0.9 / (1.0 + candleDist * candleDist * 18.0) : 0.0;
+
+  vec3 col;
+  if (inOpening && !bar) {
+    // The view outside, through glass.
+    vec2 bend = vec2(0.0);
+    float wet = 0.0;
+    if (SCENE == 0) { vec3 r = rain(q); bend = r.xy * 0.06; wet = r.z; }
+    vec2 vq = q + bend;
+    if (SCENE == 0) {
+      col = cityNight(vq);
+      col = mix(col, cityNight(vq * 0.98 + 0.01) * 1.25, wet * 0.6);    // drops catch the lights
+      col += vec3(0.06, 0.07, 0.09) * wet;
+    } else if (SCENE <= 2) {
+      col = duskRoofs(vq, SCENE == 2);
+      if (SCENE == 1) col = mix(col, vec3(0.9, 0.92, 1.0), clamp(snow(vq, 0.55), 0.0, 1.0) * 0.85);
+    } else {
+      bool summer = SCENE == 3;
+      col = daySky(vq, summer);
+      vec4 b = birch(vec2(vq.x, vq.y), summer);
+      col = mix(col, b.rgb, b.a);
+      if (!summer) col = mix(col, vec3(1.0), clamp(snow(vq, 0.18), 0.0, 1.0) * 0.7);
+    }
+    // Frost creeping in from the corners of each pane (winter scenes).
+    if (SCENE == 1 || SCENE == 4) {
+      vec2 pane = vec2(fract(q.x * 2.0), q.y > 0.68 ? (q.y - 0.68) / 0.32 : q.y / 0.68);
+      float edge = min(min(pane.x, 1.0 - pane.x), min(pane.y, 1.0 - pane.y));
+      float fr = smoothstep(0.22, 0.0, edge + (fbm(q * 30.0) - 0.5) * 0.18);
+      float fern = smoothstep(0.55, 0.75, fbm(q * vec2(60.0, 50.0)));
+      col = mix(col, vec3(0.85, 0.9, 0.98) * (night ? 0.55 : 1.0), clamp(fr * (0.45 + 0.5 * fern), 0.0, 0.85));
+    }
+    // The candle's reflection in the glass, faint.
+    if (hasCandle) {
+      vec2 rp = vec2(candlePos.x, 0.2) ;
+      float rd = length((uv - vec2(rp.x, 0.43)) * vec2(aspect, 1.0));
+      col += candleLight() * 0.14 / (1.0 + rd * rd * 400.0);
+    }
+    col *= 0.94;   // glass
+  } else {
+    // The room: the wall around the window, the frame, the sill.
+    vec3 wall = night ? vec3(0.06, 0.05, 0.05) : (SCENE == 3 ? vec3(0.62, 0.58, 0.52) : vec3(0.52, 0.53, 0.56));
+    wall *= 0.85 + 0.15 * noise(uv * vec2(300.0, 160.0));
+    col = wall;
+    bool frame = (bar || (uv.x > lo.x - frameW && uv.x < hi.x + frameW && uv.y > lo.y - frameW && uv.y < hi.y + frameW));
+    if (frame) {
+      vec3 paint = night ? vec3(0.22, 0.2, 0.18) : vec3(0.92, 0.9, 0.86);
+      col = paint * (0.9 + 0.1 * noise(uv * 400.0));
+    }
+    // The sill: a deep wooden ledge across the bottom.
+    if (uv.y < 0.23) {
+      float top = smoothstep(0.23, 0.2, uv.y) * step(0.12, uv.y);
+      vec3 wood = mix(vec3(0.36, 0.22, 0.12), vec3(0.50, 0.33, 0.18), noise(vec2(uv.x * 8.0, uv.y * 120.0)));
+      col = mix(wood * 0.55, wood, top);
+      if (!night) col *= 1.15;
+      // Daylight through the glass on the sill, with moving leaf shadows in summer.
+      if (!night && uv.y > 0.12 && uv.x > lo.x && uv.x < hi.x) {
+        float sun = 0.25;
+        if (SCENE == 3) sun *= 0.55 + 0.45 * smoothstep(0.35, 0.65, fbm(uv * vec2(14.0, 30.0) + orbit(0.25, 2.0)));
+        col += vec3(1.0, 0.92, 0.75) * sun * top;
+      }
+    }
+    // Not the window: lit by the room's light.
+    if (night && !hasCandle) col *= 0.6;
+  }
+
+  // The candle itself on the sill.
+  if (hasCandle) {
+    vec2 p = (uv - candlePos) * vec2(aspect, 1.0);
+    // Wax.
+    if (abs(p.x) < 0.028 && p.y > -0.01 && p.y < 0.11) {
+      float shade = 0.65 + 0.35 * smoothstep(0.028, -0.01, p.x);
+      col = vec3(0.93, 0.86, 0.72) * shade * (0.55 + 0.45 * smoothstep(0.0, 0.11, p.y)) + candleLight() * 0.12;
+    }
+    // A saucer.
+    if (abs(p.x) < 0.06 && p.y > -0.018 && p.y < -0.006) col = vec3(0.55, 0.52, 0.5) * 0.8 + candleLight() * 0.1;
+    // The flame, flickering.
+    float fl = 0.004 * wave(9.0, 0.0) + 0.003 * wave(14.0, 2.0) + 0.002 * wave(23.0, 4.0);
+    vec2 fp = p - vec2(fl, 0.145);
+    float flame = smoothstep(1.0, 0.6, length(fp * vec2(1.0 / 0.012, 1.0 / (0.03 + 0.003 * wave(11.0, 1.0)))));
+    col = mix(col, vec3(1.0, 0.85, 0.5), flame);
+    col += vec3(1.0, 0.95, 0.8) * smoothstep(0.6, 0.0, length(fp * vec2(1.0 / 0.005, 1.0 / 0.012))) * 0.6;
+    if (abs(p.x) < 0.0025 && p.y > 0.11 && p.y < 0.122) col = vec3(0.05);   // wick
+    // Its warm glow on everything near it.
+    col += candleLight() * glow * (inOpening && !bar ? 0.08 : 0.35);
+  }
+
+  vec2 v = uv - 0.5;
+  col *= 1.0 - dot(v, v) * (night ? 1.2 : 0.6);
+  col = col / (1.0 + col * 0.2);
+  gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 1.2)), 1.0);
+}`;
+
+const gl = document.getElementById('c').getContext('webgl', { preserveDrawingBuffer: true });
+const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, 'attribute vec2 a; void main(){ gl_Position = vec4(a, 0.0, 1.0); }'));
+gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog, 'a');
+gl.enableVertexAttribArray(loc);
+gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+gl.uniform2f(gl.getUniformLocation(prog, 'uRes'), 1280, 720);
+
+window.LOOP = LOOP;
+/** The frame at t seconds, as base64 RGBA, top row first. */
+window.renderFrame = (t) => {
+  gl.uniform1f(gl.getUniformLocation(prog, 'uT'), t);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  const px = new Uint8Array(1280 * 720 * 4);
+  gl.readPixels(0, 0, 1280, 720, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const flipped = new Uint8Array(px.length), row = 1280 * 4;
+  for (let y = 0; y < 720; y++) flipped.set(px.subarray((719 - y) * row, (720 - y) * row), y * row);
+  let bin = '';
+  for (let i = 0; i < flipped.length; i += 0x8000) bin += String.fromCharCode.apply(null, flipped.subarray(i, i + 0x8000));
+  return btoa(bin);
+};
+document.documentElement.classList.add('ready');
+</script></body></html>

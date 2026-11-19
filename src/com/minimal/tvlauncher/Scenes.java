@@ -27,7 +27,8 @@ final class Scenes {
     private static final long RETRY_AFTER_MS = 5 * 60 * 1000;
 
     // Videos that can be downloaded, by their path (as under assets/).
-    private static final String[] DOWNLOADABLE = {"apartment/room_day.mp4", "apartment/room_evening.mp4"};
+    private static final String[] DOWNLOADABLE = {"apartment/room_day.mp4", "apartment/room_evening.mp4",
+        "window/rain.mp4", "window/snow.mp4", "window/candle.mp4", "window/summer.mp4", "window/winter.mp4"};
 
     private static final Map<String, Integer> progress = new HashMap<String, Integer>();   // 0..100 while downloading
     private static final Map<String, Long> failedAt = new HashMap<String, Long>();

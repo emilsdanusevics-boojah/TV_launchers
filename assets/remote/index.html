@@ -93,7 +93,7 @@
   <section>
     <h2>Automatic</h2>
     <div id="auto"></div>
-    <p class="hint"><b>Autopilot</b> picks the launcher by itself when the home screen comes back or ambient mode starts: one by day, another after sunset, another on red days. Choosing a launcher by hand wins until the next change. <b>Evening light</b> warms and dims the screen after sunset. At <b>bedtime</b>, if nobody's using the TV, it fades to black over ten minutes. <b>Weather on Photos</b>: rain on the glass, snow, frost below 0°, and holiday sparks.</p>
+    <p class="hint"><b>Autopilot</b> picks the launcher by itself when the home screen comes back or ambient mode starts: one by day, another after sunset, another on red days. Choosing a launcher by hand wins until the next change. <b>Evening light</b> warms and dims the screen after sunset. At <b>bedtime</b>, if nobody's using the TV, it fades to black over ten minutes. <b>Weather on Photos</b>: rain on the glass, snow, frost below 0°, and holiday sparks. When music plays over the Fireplace or Window launcher, a <b>small record</b> turns in the corner instead of the full Vinyl screen.</p>
   </section>
 
   <section>
@@ -532,6 +532,7 @@ function renderAuto() {
   toggle("autopilot", "Autopilot");
   pick("autopilot_day", "By day");
   pick("autopilot_evening", "After sunset");
+  pick("autopilot_weather", "Rainy evenings", ["none", "Same as after sunset"]);
   pick("autopilot_holiday", "On red days", ["none", "Same as the time of day"]);
   toggle("day_arc", "Evening light");
   const bed = document.createElement("select");
@@ -545,6 +546,18 @@ function renderAuto() {
   bed.onchange = () => save({ bedtime: parseInt(bed.value, 10) }, "Bedtime: " + bed.options[bed.selectedIndex].text);
   row("Bedtime", bed);
   toggle("photo_effects", "Weather on Photos");
+  const music = document.createElement("div");
+  music.className = "seg";
+  for (const [v, t] of [["corner", "Small record"], ["full", "Full Vinyl"]]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = t;
+    b.className = a.music_overlay === v ? "on" : "";
+    b.setAttribute("aria-pressed", String(a.music_overlay === v));
+    b.onclick = () => save({ music_overlay: v }, "Music over Fireplace and Window: " + t.toLowerCase());
+    music.appendChild(b);
+  }
+  row("Music over Fireplace & Window", music);
 }
 
 async function upload(e, endpoint) {

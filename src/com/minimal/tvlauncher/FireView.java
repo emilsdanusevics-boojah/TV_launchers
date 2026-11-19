@@ -14,7 +14,7 @@ import android.view.WindowManager;
  */
 final class FireView extends SurfaceView implements SurfaceHolder.Callback, Choreographer.FrameCallback {
 
-    private final String path;
+    private String path;
     private final Runnable onStarted;
     private final long vsyncUs;
     private Surface surface;
@@ -31,6 +31,18 @@ final class FireView extends SurfaceView implements SurfaceHolder.Callback, Chor
         float hz = ((WindowManager) context.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRefreshRate();
         vsyncUs = Math.round(1e6 / (hz >= 23 && hz <= 240 ? hz : 60));
         getHolder().addCallback(this);
+    }
+
+    /** Plays another video instead (from its start). */
+    void setPath(String next) {
+        if (next.equals(path) && !failed) {
+            return;
+        }
+        stop();
+        path = next;
+        failed = false;
+        clockUs = 0;
+        start();
     }
 
     void onResume() {

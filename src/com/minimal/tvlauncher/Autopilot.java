@@ -40,6 +40,11 @@ final class Autopilot {
         return prefs(context).getString("autopilot_evening", "fireplace");
     }
 
+    /** The launcher for rainy or snowy evenings, or NONE to keep to the evening one. */
+    static String weather(Context context) {
+        return prefs(context).getString("autopilot_weather", "window");
+    }
+
     /** The red-day launcher, or NONE to keep to the time of day. */
     static String holiday(Context context) {
         return prefs(context).getString("autopilot_holiday", "monkey_island");
@@ -61,6 +66,15 @@ final class Autopilot {
         if (holidays && !NONE.equals(red) && Holidays.today() != null) {
             launcher.append(red);
             return date + " holiday";
+        }
+        Weather.Now w = Weather.cached();
+        String code = w == null ? "" : w.code;
+        boolean wet = code.equals("rain") || code.equals("drizzle") || code.equals("heavy_rain")
+                || code.equals("thunder") || code.equals("sleet") || code.equals("snow");
+        String rainy = weather(context);
+        if (dark && wet && !NONE.equals(rainy)) {
+            launcher.append(rainy);
+            return date + " weather";
         }
         launcher.append(dark ? evening(context) : day(context));
         return date + (dark ? " evening" : " day");
@@ -100,7 +114,8 @@ final class Autopilot {
             if (last.endsWith("|" + id) && !last.startsWith(date + "|")) {
                 e.putString("autopilot_" + slot, id).remove("autopilot_learn_" + slot);
                 learned = "Autopilot will use " + name(id) + (slot.equals("holiday") ? " on red days"
-                        : slot.equals("evening") ? " after sunset" : " by day") + " from now on";
+                        : slot.equals("weather") ? " on rainy evenings" : slot.equals("evening") ? " after sunset" : " by day")
+                        + " from now on";
             } else {
                 e.putString("autopilot_learn_" + slot, date + "|" + id);
             }

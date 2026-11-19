@@ -24,7 +24,8 @@ final class Weather {
     private static final String URL_STRING = "https://api.open-meteo.com/v1/forecast"
             + "?latitude=56.9606&longitude=24.1300"
             + "&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m"
-            + "&daily=sunrise,sunset&timezone=Europe%2FRiga&forecast_days=2";
+            + "&daily=sunrise,sunset&timezone=Europe%2FRiga&forecast_days=2"
+            + "&hourly=temperature_2m,apparent_temperature,precipitation,weather_code&past_hours=12&forecast_hours=36";
     private static final long FRESH_MS = 15 * 60 * 1000;
     private static final TimeZone RIGA = TimeZone.getTimeZone("Europe/Riga");
     private static final String[] COMPASS = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
@@ -39,6 +40,12 @@ final class Weather {
         String[] sunrise = new String[0];
         String[] sunset = new String[0];
         long fetchedAt;
+        // Hour by hour, from 12 hours ago to 36 hours ahead (Riga time, "yyyy-MM-ddTHH:mm").
+        String[] hourTime = new String[0];
+        double[] hourTemp = new double[0];
+        double[] hourFeels = new double[0];
+        double[] hourRain = new double[0];      // precipitation, mm
+        String[] hourCode = new String[0];
 
         /** e.g. "11° · Mainly clear · Sunset 17:58". */
         String line() {
@@ -144,6 +151,20 @@ final class Weather {
                 now.sunrise = strings(daily.optJSONArray("sunrise"));
                 now.sunset = strings(daily.optJSONArray("sunset"));
             }
+            JSONObject hourly = root.optJSONObject("hourly");
+            if (hourly != null) {
+                now.hourTime = strings(hourly.optJSONArray("time"));
+                now.hourTemp = numbers(hourly.optJSONArray("temperature_2m"), now.hourTime.length);
+                now.hourFeels = numbers(hourly.optJSONArray("apparent_temperature"), now.hourTime.length);
+                now.hourRain = numbers(hourly.optJSONArray("precipitation"), now.hourTime.length);
+                double[] codes = numbers(hourly.optJSONArray("weather_code"), now.hourTime.length);
+                now.hourCode = new String[codes.length];
+                for (int i = 0; i < codes.length; i++) {
+                    Now h = new Now();
+                    describe(h, (int) codes[i]);
+                    now.hourCode[i] = h.code;
+                }
+            }
             now.fetchedAt = System.currentTimeMillis();
             return now;
         } catch (Exception e) {
@@ -153,6 +174,14 @@ final class Weather {
                 conn.disconnect();
             }
         }
+    }
+
+    private static double[] numbers(JSONArray array, int n) {
+        double[] out = new double[n];
+        for (int i = 0; i < n; i++) {
+            out[i] = array == null ? 0 : array.optDouble(i, 0);
+        }
+        return out;
     }
 
     private static String[] strings(JSONArray array) {

@@ -300,16 +300,24 @@ class RemoteServer extends Thread {
                     e.putBoolean(b, o.getBoolean(b));
                 }
             }
-            for (String k : new String[] {"autopilot_day", "autopilot_evening", "autopilot_holiday"}) {
+            for (String k : new String[] {"autopilot_day", "autopilot_evening", "autopilot_weather", "autopilot_holiday"}) {
                 if (o.has(k)) {
                     String id = o.getString(k);
-                    boolean ok = ids.contains(id) || (k.equals("autopilot_holiday") && id.equals(Autopilot.NONE));
+                    boolean ok = ids.contains(id) || (!k.equals("autopilot_day") && !k.equals("autopilot_evening") && id.equals(Autopilot.NONE));
                     if (!ok) {
                         send(out, 400, "text/plain", ("Unknown launcher: " + id).getBytes("UTF-8"));
                         return;
                     }
                     e.putString(k, id);
                 }
+            }
+            if (o.has("music_overlay")) {
+                String m = o.getString("music_overlay");
+                if (!m.equals("corner") && !m.equals("full")) {
+                    send(out, 400, "text/plain", "music_overlay is corner or full".getBytes("UTF-8"));
+                    return;
+                }
+                e.putString("music_overlay", m);
             }
             if (o.has("bedtime")) {
                 int h = o.getInt("bedtime");
@@ -409,7 +417,9 @@ class RemoteServer extends Thread {
                 .put("autopilot", Autopilot.enabled(context))
                 .put("autopilot_day", Autopilot.day(context))
                 .put("autopilot_evening", Autopilot.evening(context))
+                .put("autopilot_weather", Autopilot.weather(context))
                 .put("autopilot_holiday", Autopilot.holiday(context))
+                .put("music_overlay", context.getSharedPreferences("launcher", Context.MODE_PRIVATE).getString("music_overlay", "corner"))
                 .put("day_arc", DayArc.enabled(context))
                 .put("bedtime", DayArc.bedtime(context))
                 .put("photo_effects", PhotoEffects.enabled(context)));

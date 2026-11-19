@@ -100,6 +100,9 @@ class PhotosTheme implements LauncherTheme {
     private long lastMemoryAt;
     private final Random pick = new Random();
     private TextView board;
+    private LinearLayout glance;      // the morning / evening card, top right
+    private TextView glanceTitle;
+    private TextView glanceText;
     private int photoIndex = -1;
     private int screenW = 1920, screenH = 1080;
     private int request;
@@ -199,6 +202,30 @@ class PhotosTheme implements LauncherTheme {
         creditParams.setMargins(0, dp(20), dp(28), 0);
         root.addView(credit, creditParams);
 
+        // The glance card: today's weather in the morning, tomorrow's in the evening.
+        glance = new LinearLayout(activity);
+        glance.setOrientation(LinearLayout.VERTICAL);
+        glance.setPadding(dp(18), dp(12), dp(18), dp(14));
+        GradientDrawable card = new GradientDrawable();
+        card.setColor(0x8C101012);
+        card.setCornerRadius(dp(14));
+        card.setStroke(dp(1), 0x1FFFFFFF);
+        glance.setBackground(card);
+        glanceTitle = PanelMenu.text(activity, medium, 11, 0xB3ECEBE8);
+        glanceTitle.setLetterSpacing(0.14f);
+        glanceTitle.setAllCaps(true);
+        glanceText = PanelMenu.text(activity, medium, 15, FG);
+        glanceText.setSingleLine(false);
+        glanceText.setLineSpacing(dp(4), 1f);
+        glance.addView(glanceTitle);
+        LinearLayout.LayoutParams gtp = new LinearLayout.LayoutParams(-2, -2);
+        gtp.topMargin = dp(6);
+        glance.addView(glanceText, gtp);
+        glance.setVisibility(View.GONE);
+        FrameLayout.LayoutParams glanceParams = new FrameLayout.LayoutParams(dp(330), -2, Gravity.TOP | Gravity.END);
+        glanceParams.setMargins(0, dp(48), dp(28), 0);
+        root.addView(glance, glanceParams);
+
         // App tiles along the bottom, settings at the far right.
         bottom = new LinearLayout(activity);
         bottom.setOrientation(LinearLayout.HORIZONTAL);
@@ -262,7 +289,7 @@ class PhotosTheme implements LauncherTheme {
         if (ambient) {
             menu.close();
         }
-        AmbientClock.fade(ambient, cornerShade, bottomShade, corner, credit, bottom);
+        AmbientClock.fade(ambient, cornerShade, bottomShade, corner, credit, bottom, glance);
         ambientClock.show(ambient);
     }
 
@@ -388,6 +415,7 @@ class PhotosTheme implements LauncherTheme {
         names.setVisibility(today == null ? View.GONE : View.VISIBLE);
         showHoliday();
         showBoard();
+        showGlance();
         ambientClock.tick();
     }
 
@@ -657,6 +685,16 @@ class PhotosTheme implements LauncherTheme {
         return photos.get(pick.nextInt(photos.size()));
     }
 
+    private void showGlance() {
+        Date now = new Date();
+        List<String> lines = Glance.lines(activity, Weather.cached(), now);
+        glance.setVisibility(lines.isEmpty() ? View.GONE : View.VISIBLE);
+        if (!lines.isEmpty()) {
+            glanceTitle.setText(Glance.title(now));
+            glanceText.setText(TextUtils.join("\n", lines));
+        }
+    }
+
     private void showBoard() {
         List<String> lines = Board.lines(activity, Calendar.getInstance());
         board.setVisibility(lines.isEmpty() ? View.GONE : View.VISIBLE);
@@ -748,6 +786,9 @@ class PhotosTheme implements LauncherTheme {
     private void showWeather(Weather.Now now) {
         if (effects != null) {
             effects.setWeather(now);
+        }
+        if (glance != null) {
+            showGlance();
         }
         weatherLine.setText(now == null ? "" : now.line());
         weatherLine.setVisibility(now == null ? View.GONE : View.VISIBLE);

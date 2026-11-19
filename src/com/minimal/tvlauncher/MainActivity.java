@@ -22,7 +22,8 @@ import java.util.List;
  * settings menu inside each of them; the choice is remembered.
  *
  * Whatever the chosen launcher, while Spotify is playing the Vinyl launcher's record is
- * shown over it, and it goes away again once the music stops. Back hides the record until
+ * shown over it, and it goes away again once the music stops. Over the Fireplace and Window
+ * launchers it's a small record in the corner instead (MiniRecord), unless set otherwise. Back hides the record until
  * the music next starts.
  *
  * After a few minutes without the remote (set on the phone page), the launcher on screen
@@ -37,8 +38,8 @@ import java.util.List;
  */
 public class MainActivity extends Activity implements NowPlaying.Listener, Remote.Listener {
 
-    static final String[] LAUNCHER_IDS = {"photos", "apartment", "fireplace", "monkey_island", "vinyl"};
-    static final String[] LAUNCHER_NAMES = {"Photos", "Apartment", "Fireplace", "Monkey Island", "Vinyl"};
+    static final String[] LAUNCHER_IDS = {"photos", "apartment", "fireplace", "window", "monkey_island", "vinyl"};
+    static final String[] LAUNCHER_NAMES = {"Photos", "Apartment", "Fireplace", "Window", "Monkey Island", "Vinyl"};
     static final String DEFAULT_LAUNCHER = "photos";
 
     private static final long PAUSED_COUNTS_AS_STOPPED_MS = 30000;
@@ -56,6 +57,8 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     private LauncherTheme base;      // the launcher the user picked
     private View baseView;
     private VinylTheme vinyl;        // shown over it while music plays (null if base is Vinyl)
+    private MiniRecord mini;         // or this small record, over Fireplace and Window
+    private boolean showingMini;
     private View vinylView;
     private NowPlaying music;
     private boolean showingVinyl;
@@ -156,12 +159,22 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             base = new ApartmentTheme(this);
         } else if ("fireplace".equals(launcher)) {
             base = new FireplaceTheme(this);
+        } else if ("window".equals(launcher)) {
+            base = new WindowTheme(this);
         } else {
             base = new PhotosTheme(this);
         }
         container = new FrameLayout(this);
         baseView = base.createView();
         container.addView(baseView, new FrameLayout.LayoutParams(-1, -1));
+        if (base instanceof FireplaceTheme || base instanceof WindowTheme) {
+            mini = new MiniRecord(this);
+            int m = PanelMenu.dp(this, 36);
+            FrameLayout.LayoutParams mp = new FrameLayout.LayoutParams(PanelMenu.dp(this, 460), PanelMenu.dp(this, 110),
+                    android.view.Gravity.BOTTOM | android.view.Gravity.END);
+            mp.setMargins(0, 0, m, m);
+            container.addView(mini, mp);
+        }
         dayArc = new DayArc(this);
         dayArc.setStrength(veilStrength(launcher));
         container.addView(dayArc, new FrameLayout.LayoutParams(-1, -1));
@@ -257,6 +270,9 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     @Override
     public void onStateChanged(int state) {
         handler.removeCallbacks(musicStopped);
+        if (mini != null) {
+            mini.setPlaying(state == NowPlaying.PLAYING);
+        }
         if (state == NowPlaying.PLAYING) {
             if (!dismissed) {
                 showVinyl(true);
@@ -271,14 +287,34 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
 
     @Override
     public void onArtChanged(Bitmap art, int[] colors) {
-        // The Vinyl launcher follows the music itself.
+        // The Vinyl launcher follows the music itself; the small record needs telling.
+        if (mini != null && music != null) {
+            mini.setTrack(art, colors, music.title(), music.artist());
+        }
     }
 
     @Override
     public void onTimingChanged(long positionMs, long updatedAt, float speed, long durationMs) {
     }
 
+    // The small corner record, used instead of the full Vinyl screen over Fireplace and Window.
+    private boolean useMini() {
+        return mini != null && !"full".equals(settings.getString("music_overlay", "corner"));
+    }
+
     private void showVinyl(boolean show) {
+        if (useMini() || (showingMini && !show)) {
+            if (show != showingMini) {
+                showingMini = show;
+                if (show && music != null) {
+                    mini.setText(music.title(), music.artist());
+                }
+                mini.show(show);
+            }
+            if (!show || useMini()) {
+                return;
+            }
+        }
         if (vinyl == null || show == showingVinyl) {
             return;
         }
@@ -393,7 +429,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     @Override
     public void onBackPressed() {
         // This is the home screen; Back closes menus, or hides the record.
-        if (!active().onBack() && showingVinyl) {
+        if (!active().onBack() && (showingVinyl || showingMini)) {
             dismissed = true;
             showVinyl(false);
         }
@@ -475,7 +511,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     private static float veilStrength(String id) {
         if ("apartment".equals(id)) {
             return 0.4f;    // has its own evening lamps
-        } else if ("fireplace".equals(id)) {
+        } else if ("fireplace".equals(id) || "window".equals(id)) {
             return 0.5f;
         } else if ("vinyl".equals(id)) {
             return 0.7f;
