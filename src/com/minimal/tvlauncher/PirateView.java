@@ -17,8 +17,10 @@ import java.util.Random;
 
 /**
  * The Monkey Island launcher's ambient mode: a pirate (an original character, drawn by
- * make_pirate.py) strolls through a string of full-screen scenes along a coast (drawn by
- * make_scenes.py). He walks off one side of the screen into the next place, now and then
+ * make_pirate.py) strolls through the Monkey Island backgrounds uploaded on the phone page,
+ * in their slideshow order, or, if there are none, through a string of built-in scenes along a
+ * coast (drawn by make_scenes.py). In an uploaded background his feet are 90% of the way down
+ * the picture, unless its name gives the row, e.g. dock_g130.png. He walks off one side of the screen into the next place, now and then
  * stops to look around, and sometimes says something (on red days, about the holiday).
  *
  * A walk sprite sheet uploaded on the phone page replaces the built-in pirate: one row of
@@ -34,8 +36,10 @@ final class PirateView extends View {
     private static final int[] SCENES = {
         R.drawable.scene_harbour, R.drawable.scene_jungle, R.drawable.scene_beach, R.drawable.scene_town,
     };
-    private static final int SCENE_H = 180;
-    private static final int GROUND = 168;        // row his feet are on, in the scene art
+    private static final int BUILT_IN_GROUND = 168;   // row his feet are on, in the built-in scenes
+    // In uploaded backgrounds: this far down the picture, unless its name says (…_g130.png).
+    private static final float DEFAULT_GROUND = 0.9f;
+    private static final Pattern GROUND_IN_NAME = Pattern.compile(".*_g(\\d{1,4})\\.[A-Za-z]+");
     static final String CUSTOM_DIR = "pirate";
     static final Pattern CUSTOM_NAME = Pattern.compile("walk_(\\d{1,2})\\.(png|gif|webp)");
     private static final int MAX_HEIGHT = 90;     // taller sprites are shrunk by a whole factor
@@ -62,7 +66,15 @@ final class PirateView extends View {
     private final Paint fillPaint = new Paint();
     private final Rect src = new Rect();
     private final Rect dst = new Rect();
-    private final Bitmap[] scenes = new Bitmap[SCENES.length];
+    // The places he walks through: the Monkey Island backgrounds uploaded on the phone page,
+    // or the built-in coast if there are none. Only the one on screen is kept in memory.
+    private final List<File> uploaded = new ArrayList<File>();
+    private int sceneCount = SCENES.length;
+    private Bitmap sceneArt;
+    private int sceneArtIndex = -1;
+    private int sceneW;            // the picture's own size (before any downsampling on load)
+    private int sceneH;
+    private int sceneGround;       // row his feet are on, in the picture's own pixels
     private Bitmap sheet;
     // The sprite sheet's layout: the built-in pirate's, or an uploaded one's.
     private int frameW = 24;
@@ -138,6 +150,12 @@ final class PirateView extends View {
             return;
         }
         running = true;
+        // Re-read the uploaded backgrounds each time, so changes from the phone show up.
+        uploaded.clear();
+        uploaded.addAll(MonkeyIslandTheme.backgrounds(getContext()));
+        sceneCount = uploaded.isEmpty() ? SCENES.length : uploaded.size();
+        sceneArt = null;
+        sceneArtIndex = -1;
         enterScene(scene, 1);
         speech = null;
         fade = 0;
@@ -173,9 +191,8 @@ final class PirateView extends View {
     }
 
     private void releaseBitmaps() {
-        for (int i = 0; i < scenes.length; i++) {
-            scenes[i] = null;   // a few small bitmaps; loaded again next time
-        }
+        sceneArt = null;   // loaded again next time
+        sceneArtIndex = -1;
         sheet = null;
     }
 
@@ -194,7 +211,7 @@ final class PirateView extends View {
     }
 
     private void enterScene(int index, int direction) {
-        scene = ((index % SCENES.length) + SCENES.length) % SCENES.length;
+        scene = ((index % sceneCount) + sceneCount) % sceneCount;
         dir = direction;
         x = direction > 0 ? -drawW() : gridWidth();
         frame = 0;
@@ -270,10 +287,41 @@ final class PirateView extends View {
     // ---- Drawing ----
 
     private Bitmap scene(int i) {
-        if (scenes[i] == null) {
-            scenes[i] = decode(SCENES[i]);
+        if (sceneArtIndex == i && sceneArt != null) {
+            return sceneArt;
         }
-        return scenes[i];
+        sceneArt = null;
+        if (i < uploaded.size()) {
+            File f = uploaded.get(i);
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(f.getPath(), bounds);
+            if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+                BitmapFactory.Options opts = new BitmapFactory.Options();
+                opts.inSampleSize = 1;
+                while (bounds.outWidth / (opts.inSampleSize * 2) >= 640) {
+                    opts.inSampleSize *= 2;   // a big photo: no need for more than the grid shows
+                }
+                try {
+                    sceneArt = BitmapFactory.decodeFile(f.getPath(), opts);
+                } catch (OutOfMemoryError ignored) {
+                    sceneArt = null;
+                }
+                sceneW = bounds.outWidth;
+                sceneH = bounds.outHeight;
+                Matcher m = GROUND_IN_NAME.matcher(f.getName());
+                sceneGround = m.matches() ? Math.min(sceneH - 1, Integer.parseInt(m.group(1)))
+                        : Math.round(sceneH * DEFAULT_GROUND);
+            }
+        }
+        if (sceneArt == null) {
+            sceneArt = decode(SCENES[i % SCENES.length]);
+            sceneW = sceneArt.getWidth();
+            sceneH = sceneArt.getHeight();
+            sceneGround = BUILT_IN_GROUND;
+        }
+        sceneArtIndex = i;
+        return sceneArt;
     }
 
     /** The uploaded sprite sheet if there is a usable one, otherwise the built-in pirate. */
@@ -362,15 +410,18 @@ final class PirateView extends View {
         }
         Canvas c = gridCanvas;
         c.drawColor(0xFF000000);
-        int top = (gh - SCENE_H) / 2;   // the scenes are 180 rows; a 16:9 screen is exactly that
-
+        // The scene fills the width; a short one (like a 320x144 game screen) sits in the middle
+        // with black above and below, a tall one is cropped top and bottom.
         Bitmap art = scene(scene);
+        float scale = gw / (float) sceneW;
+        int sceneRows = Math.round(sceneH * scale);
+        int top = (gh - sceneRows) / 2;
         src.set(0, 0, art.getWidth(), art.getHeight());
-        dst.set(0, top, gw, top + SCENE_H);
+        dst.set(0, top, gw, top + sceneRows);
         c.drawBitmap(art, src, dst, blitPaint);
 
         // The pirate, flipped when walking left.
-        int feet = top + GROUND;
+        int feet = Math.min(gh - 1, top + Math.round(sceneGround * scale));
         src.set(frame * frameW, 0, (frame + 1) * frameW, frameH);
         dst.set(x, feet - drawH() + 1, x + drawW(), feet + 1);
         if (dir < 0) {

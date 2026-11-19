@@ -374,8 +374,12 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
     // where ... is /sdcard/Android/data/com.minimal.tvlauncher. Files are re-read each time,
     // so images pushed with adb show up without restarting the launcher.
     private List<File> findBackgrounds() {
+        return backgrounds(activity);
+    }
+
+    static List<File> backgrounds(android.content.Context context) {
         List<File> result = new ArrayList<File>();
-        File dir = activity.getExternalFilesDir(null);
+        File dir = context.getExternalFilesDir(null);
         if (dir == null) {
             return result;
         }
