@@ -83,7 +83,7 @@ After a few minutes without the remote (5 by default; set it to off, 2, 5, 10 or
 - **Apartment:** the room, with the live sky in the windows.
 - **Fireplace:** the fire (and its sound, if it's on).
 - **Vinyl:** the turntable.
-- **Monkey Island:** a pirate (an original character, drawn by `make_pirate.py`) strolls through four full-screen scenes along a coast: the harbour at dusk, a jungle path, a beach and the town at night (drawn by `make_scenes.py`). He walks off one side of the screen into the next place, now and then stops to look around, and sometimes says something. On red days he talks about the holiday.
+- **Monkey Island:** a pirate (an original character, drawn by `make_pirate.py`) strolls through four full-screen scenes along a coast: the harbour at dusk, a jungle path, a beach and the town at night (drawn by `make_scenes.py`). He walks off one side of the screen into the next place, now and then stops to look around, and sometimes says something. On red days he talks about the holiday. You can swap in a walk cycle of your own on the phone page (**Monkey Island ambient walker**): one row of equal frames facing right, at the game's own pixel size, plus the number of frames. A flat background colour is made transparent.
 
 Any button brings the launcher back; that first press does nothing else. Ambient mode doesn't start while music is playing. It keeps the screen on for up to two hours, then the TV's own sleep timer takes over.
 
@@ -161,6 +161,7 @@ While the launcher is running, it serves a small page on your home Wi-Fi at **ht
 
 - switch launcher
 - set how long until ambient mode starts, or turn it off
+- upload your own walk sprite sheet for Monkey Island's ambient mode
 - show, hide, reorder and rename apps
 - upload and delete photos for the Photos launcher
 - upload and delete Monkey Island background images

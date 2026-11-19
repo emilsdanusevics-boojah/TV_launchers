@@ -51,6 +51,8 @@
     border-radius: 10px; padding: 10px 12px; min-height: 44px; min-width: 0; width: 100%;
   }
   .empty { color: var(--muted); font-size: 14px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
+  .row input[type=number] { min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #444); background: var(--chip); color: inherit; font: inherit; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
   figure { margin: 0; position: relative; border-radius: 10px; overflow: hidden; background: var(--chip); }
   figure img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; image-rendering: pixelated; }
@@ -116,6 +118,17 @@
   </section>
 
   <section>
+    <h2>Monkey Island ambient walker</h2>
+    <div id="pirate"></div>
+    <div class="row">
+      <label for="frames">Frames</label>
+      <input type="number" id="frames" min="1" max="99" value="6" inputmode="numeric" style="width: 5em">
+      <label class="upload"><input type="file" id="pirateFile" accept="image/png,image/gif,image/webp"><span>Upload sprite sheet</span></label>
+    </div>
+    <p class="hint">Replaces the built-in pirate in ambient mode. One row of equal walking frames, facing right, at the game's own pixel size (about 30–80 px tall; bigger sheets are shrunk). A flat background colour is made transparent. Takes effect the next time ambient mode starts.</p>
+  </section>
+
+  <section>
     <h2>Update the launcher</h2>
     <p class="empty" id="version"></p>
     <div id="permission" hidden>
@@ -169,6 +182,32 @@ function render() {
       toast(l.name + " is on the TV");
     };
     seg.appendChild(b);
+  }
+
+  // Ambient walker
+  const pir = $("pirate");
+  pir.innerHTML = "";
+  if (state.pirate) {
+    const fig = document.createElement("figure");
+    const img = document.createElement("img");
+    img.src = "/api/pirate?v=" + encodeURIComponent(state.pirate);
+    img.alt = "Uploaded walk sprite sheet";
+    img.style.imageRendering = "pixelated";
+    img.style.width = "100%";
+    img.style.background = "#334";
+    fig.appendChild(img);
+    const del = document.createElement("button");
+    del.type = "button";
+    del.textContent = "Remove";
+    del.onclick = async () => {
+      state = await api("DELETE", "/api/pirate");
+      render();
+      toast("Back to the built-in pirate");
+    };
+    fig.appendChild(del);
+    pir.appendChild(fig);
+  } else {
+    pir.innerHTML = '<p class="empty">None yet. Ambient mode uses the built-in pirate.</p>';
   }
 
   // Ambient mode
@@ -295,6 +334,21 @@ $("addButton").onclick = () => {
     saveApps("Added " + app.label);
   }
 };
+
+$("pirateFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const frames = parseInt($("frames").value, 10);
+  if (!(frames >= 1 && frames <= 99)) { toast("Frames must be 1 to 99"); return; }
+  try {
+    state = await api("POST", "/api/pirate?frames=" + frames + "&name=" + encodeURIComponent(file.name), file, file.type || "image/png");
+    render();
+    toast("Sprite sheet uploaded");
+  } catch (err) {
+    toast("Couldn't upload: " + err.message);
+  }
+});
 
 async function upload(e, endpoint) {
   const files = [...e.target.files];

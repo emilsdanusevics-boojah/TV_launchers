@@ -41,6 +41,9 @@ import java.util.concurrent.Executors;
  *   POST   /api/background?name=x    upload (the request body is the image)
  *   DELETE /api/background?name=x
  *   GET, POST, DELETE /api/photo?name=x   the same, for the Photos launcher's photos
+ *   GET    /api/pirate               the uploaded walk sprite sheet for Monkey Island's ambient mode
+ *   POST   /api/pirate?frames=n&name=x   upload one (replaces any earlier one)
+ *   DELETE /api/pirate               back to the built-in pirate
  *   GET    /api/update               version, whether installs are allowed, install progress
  *   POST   /api/update               install an update (the request body is the APK)
  *   POST   /api/update/permission    open the TV's "Install unknown apps" setting
@@ -299,6 +302,8 @@ class RemoteServer extends Thread {
             images(req, out, backgroundsDir());
         } else if (req.path.equals("/api/photo")) {
             images(req, out, photosDir());
+        } else if (req.path.equals("/api/pirate")) {
+            pirate(req, out);
         } else if (key.equals("GET /api/update")) {
             sendJson(out, updateState());
         } else if (key.equals("POST /api/update/permission")) {
@@ -372,6 +377,8 @@ class RemoteServer extends Thread {
         state.put("installed", installed);
         state.put("backgrounds", imageList(backgroundsDir()));
         state.put("photos", imageList(photosDir()));
+        File sheet = PirateView.customSheet(context);
+        state.put("pirate", sheet == null ? JSONObject.NULL : sheet.getName() + ":" + sheet.lastModified());
         return state;
     }
 
@@ -399,6 +406,67 @@ class RemoteServer extends Thread {
     private File photosDir() {
         File root = context.getExternalFilesDir(null);
         return root == null ? null : new File(root, "photos");
+    }
+
+    // Monkey Island's ambient-mode walker: files/pirate/walk_N.png, N = frames in the strip.
+    private void pirate(Request req, OutputStream out) throws Exception {
+        File root = context.getExternalFilesDir(null);
+        if (root == null) {
+            send(out, 500, "text/plain", "No storage".getBytes("UTF-8"));
+            return;
+        }
+        File dir = new File(root, PirateView.CUSTOM_DIR);
+        File current = PirateView.customSheet(context);
+        if (req.method.equals("GET")) {
+            if (current == null) {
+                send(out, 404, "text/plain", "Not found".getBytes("UTF-8"));
+                return;
+            }
+            String n = current.getName();
+            send(out, 200, "image/" + n.substring(n.lastIndexOf('.') + 1), readFile(current));
+            return;
+        }
+        if (req.method.equals("POST")) {
+            int frames;
+            try {
+                frames = Integer.parseInt(req.query.get("frames"));
+            } catch (Exception e) {
+                frames = 0;
+            }
+            String name = safeName(req.query.get("name"));
+            String ext = name == null ? "" : name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+            if (frames < 1 || frames > 99 || !(ext.equals("png") || ext.equals("gif") || ext.equals("webp"))) {
+                send(out, 400, "text/plain", "Needs a PNG, GIF or WebP and 1 to 99 frames".getBytes("UTF-8"));
+                return;
+            }
+            if (req.body.length == 0) {
+                send(out, 400, "text/plain", "Empty upload".getBytes("UTF-8"));
+                return;
+            }
+            clearDir(dir);
+            dir.mkdirs();
+            FileOutputStream fos = new FileOutputStream(new File(dir, "walk_" + frames + "." + ext));
+            try {
+                fos.write(req.body);
+            } finally {
+                fos.close();
+            }
+        } else if (req.method.equals("DELETE")) {
+            clearDir(dir);
+        } else {
+            send(out, 405, "text/plain", "Method not allowed".getBytes("UTF-8"));
+            return;
+        }
+        sendJson(out, state());
+    }
+
+    private static void clearDir(File dir) {
+        File[] old = dir.listFiles();
+        if (old != null) {
+            for (File f : old) {
+                f.delete();
+            }
+        }
     }
 
     private static boolean isImage(String name) {

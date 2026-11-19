@@ -8,7 +8,10 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.view.View;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.List;
 import java.util.Random;
 
@@ -17,6 +20,11 @@ import java.util.Random;
  * make_pirate.py) strolls through a string of full-screen scenes along a coast (drawn by
  * make_scenes.py). He walks off one side of the screen into the next place, now and then
  * stops to look around, and sometimes says something (on red days, about the holiday).
+ *
+ * A walk sprite sheet uploaded on the phone page replaces the built-in pirate: one row of
+ * equal frames facing right, saved as files/pirate/walk_N.png where N is the number of frames
+ * (all of them walking; the first is also used for standing). A solid background colour
+ * (whatever the top-left pixel is) is made transparent.
  *
  * Like the rest of the launcher it is drawn on the 320-wide pixel grid and scaled up without
  * smoothing. It only redraws a few times a second, which is all a walk cycle needs.
@@ -28,11 +36,9 @@ final class PirateView extends View {
     };
     private static final int SCENE_H = 180;
     private static final int GROUND = 168;        // row his feet are on, in the scene art
-    private static final int FRAME_W = 24;
-    private static final int FRAME_H = 40;
-    private static final int WALK_FRAMES = 6;
-    private static final int STAND = 6;
-    private static final int BLINK = 7;
+    static final String CUSTOM_DIR = "pirate";
+    static final Pattern CUSTOM_NAME = Pattern.compile("walk_(\\d{1,2})\\.(png|gif|webp)");
+    private static final int MAX_HEIGHT = 90;     // taller sprites are shrunk by a whole factor
     private static final long TICK_MS = 125;      // eight animation frames a second
     private static final int STEP = 3;            // grid pixels per walk frame
     private static final int FADE_TICKS = 3;      // through black between scenes
@@ -58,6 +64,13 @@ final class PirateView extends View {
     private final Rect dst = new Rect();
     private final Bitmap[] scenes = new Bitmap[SCENES.length];
     private Bitmap sheet;
+    // The sprite sheet's layout: the built-in pirate's, or an uploaded one's.
+    private int frameW = 24;
+    private int frameH = 40;
+    private int walkFrames = 6;
+    private int standFrame = 6;
+    private int blinkFrame = 7;
+    private int shrink = 1;
     private Bitmap grid;
     private Canvas gridCanvas;
 
@@ -168,6 +181,14 @@ final class PirateView extends View {
 
     // ---- Walking ----
 
+    private int drawW() {
+        return frameW / shrink;
+    }
+
+    private int drawH() {
+        return frameH / shrink;
+    }
+
     private int gridWidth() {
         return Math.max(1, getWidth() / unit);
     }
@@ -175,12 +196,12 @@ final class PirateView extends View {
     private void enterScene(int index, int direction) {
         scene = ((index % SCENES.length) + SCENES.length) % SCENES.length;
         dir = direction;
-        x = direction > 0 ? -FRAME_W : gridWidth();
+        x = direction > 0 ? -drawW() : gridWidth();
         frame = 0;
         idleTicks = 0;
         // Most of the time he stops somewhere in the middle third of the screen.
         int w = gridWidth();
-        pauseAt = random.nextInt(3) == 0 ? -1000 : w / 3 + random.nextInt(Math.max(1, w / 3)) - FRAME_W / 2;
+        pauseAt = random.nextInt(3) == 0 ? -1000 : w / 3 + random.nextInt(Math.max(1, w / 3)) - drawW() / 2;
     }
 
     private void step() {
@@ -200,7 +221,7 @@ final class PirateView extends View {
 
         if (idleTicks > 0) {
             idleTicks--;
-            frame = random.nextInt(14) == 0 ? BLINK : STAND;
+            frame = random.nextInt(14) == 0 ? blinkFrame : standFrame;
             if (glance && (idleTicks == idleLength * 2 / 3 || idleTicks == idleLength / 3)) {
                 dir = -dir;
             }
@@ -210,7 +231,7 @@ final class PirateView extends View {
             return;
         }
 
-        frame = (frame + 1) % WALK_FRAMES;
+        frame = (frame + 1) % walkFrames;
         int before = x;
         x += dir * STEP;
         if (pauseAt != -1000 && (before - pauseAt) * (x - pauseAt) <= 0) {
@@ -219,7 +240,7 @@ final class PirateView extends View {
             return;
         }
         int w = gridWidth();
-        if (x > w || x < -FRAME_W) {
+        if (x > w || x < -drawW()) {
             // Off the edge: on to the next place along the coast (or back to the last one).
             pendingScene = scene + dir;
             fade = FADE_TICKS;
@@ -230,7 +251,7 @@ final class PirateView extends View {
     private void stopForAWhile() {
         idleLength = 16 + random.nextInt(32);   // 2 to 6 seconds
         idleTicks = idleLength;
-        frame = STAND;
+        frame = standFrame;
         turnBack = random.nextInt(4) == 0;
         glance = !turnBack && random.nextInt(3) == 0;
         String line = null;
@@ -255,6 +276,70 @@ final class PirateView extends View {
         return scenes[i];
     }
 
+    /** The uploaded sprite sheet if there is a usable one, otherwise the built-in pirate. */
+    static File customSheet(Context context) {
+        File root = context.getExternalFilesDir(null);
+        File[] files = root == null ? null : new File(root, CUSTOM_DIR).listFiles();
+        if (files != null) {
+            for (File f : files) {
+                if (f.isFile() && CUSTOM_NAME.matcher(f.getName()).matches()) {
+                    return f;
+                }
+            }
+        }
+        return null;
+    }
+
+    private void loadSheet() {
+        File custom = customSheet(getContext());
+        if (custom != null) {
+            Matcher m = CUSTOM_NAME.matcher(custom.getName());
+            m.matches();
+            int frames = Integer.parseInt(m.group(1));
+            Bitmap b = null;
+            try {
+                b = BitmapFactory.decodeFile(custom.getPath());
+            } catch (OutOfMemoryError ignored) {
+                // fall back to the built-in pirate
+            }
+            if (b != null && frames > 0 && b.getWidth() >= frames) {
+                sheet = clearBackground(b);
+                frameW = b.getWidth() / frames;
+                frameH = b.getHeight();
+                walkFrames = frames;
+                standFrame = 0;
+                blinkFrame = 0;
+                shrink = (frameH + MAX_HEIGHT - 1) / MAX_HEIGHT;
+                return;
+            }
+        }
+        sheet = decode(R.drawable.pirate);
+        frameW = 24;
+        frameH = 40;
+        walkFrames = 6;
+        standFrame = 6;
+        blinkFrame = 7;
+        shrink = 1;
+    }
+
+    // Sprite sheets often come on a flat colour instead of transparency: drop that colour.
+    private static Bitmap clearBackground(Bitmap b) {
+        int key = b.getPixel(0, 0);
+        if ((key >>> 24) != 0xFF) {
+            return b;   // already transparent
+        }
+        int w = b.getWidth();
+        int h = b.getHeight();
+        int[] px = new int[w * h];
+        b.getPixels(px, 0, w, 0, 0, w, h);
+        for (int i = 0; i < px.length; i++) {
+            if (px[i] == key) {
+                px[i] = 0;
+            }
+        }
+        return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888);
+    }
+
     private Bitmap decode(int res) {
         BitmapFactory.Options opts = new BitmapFactory.Options();
         opts.inScaled = false;
@@ -273,7 +358,7 @@ final class PirateView extends View {
             gridCanvas = new Canvas(grid);
         }
         if (sheet == null) {
-            sheet = decode(R.drawable.pirate);
+            loadSheet();
         }
         Canvas c = gridCanvas;
         c.drawColor(0xFF000000);
@@ -286,11 +371,11 @@ final class PirateView extends View {
 
         // The pirate, flipped when walking left.
         int feet = top + GROUND;
-        src.set(frame * FRAME_W, 0, (frame + 1) * FRAME_W, FRAME_H);
-        dst.set(x, feet - FRAME_H + 1, x + FRAME_W, feet + 1);
+        src.set(frame * frameW, 0, (frame + 1) * frameW, frameH);
+        dst.set(x, feet - drawH() + 1, x + drawW(), feet + 1);
         if (dir < 0) {
             c.save();
-            c.scale(-1, 1, x + FRAME_W / 2f, 0);
+            c.scale(-1, 1, x + drawW() / 2f, 0);
             c.drawBitmap(sheet, src, dst, blitPaint);
             c.restore();
         } else {
@@ -298,7 +383,7 @@ final class PirateView extends View {
         }
 
         if (speech != null) {
-            drawSpeech(c, gw, feet - FRAME_H - 3);
+            drawSpeech(c, gw, feet - drawH() - 3);
         }
 
         // A small clock in the top-right corner.
@@ -323,7 +408,7 @@ final class PirateView extends View {
         int lineH = fm.descent - fm.ascent;
         List<String> rows = wrap(speech, 150);
         int y = bottom - rows.size() * lineH;
-        int centre = x + FRAME_W / 2;
+        int centre = x + drawW() / 2;
         for (String row : rows) {
             int w = (int) Math.ceil(textPaint.measureText(row));
             int left = Math.max(4, Math.min(gw - w - 4, centre - w / 2));
