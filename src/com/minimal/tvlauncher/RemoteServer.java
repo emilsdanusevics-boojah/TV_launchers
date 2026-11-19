@@ -35,6 +35,8 @@ import java.util.concurrent.Executors;
  *   GET    /                         the page
  *   GET    /api/state                launchers, apps, installed apps, backgrounds, photos
  *   POST   /api/launcher             {"id": "..."}
+ *   POST   /api/auto                 any of {"autopilot": bool, "autopilot_day"/"autopilot_evening"/"autopilot_holiday": id or "none",
+ *                                     "day_arc": bool, "bedtime": hour or -1, "photo_effects": bool}
  *   POST   /api/apps                 [{"pkg": "...", "name": "..."}, ...]
  *   POST   /api/ambient              {"minutes": n}   minutes without the remote before ambient mode; 0 = off
  *   GET    /api/background?name=x    one background image
@@ -288,6 +290,38 @@ class RemoteServer extends Thread {
             }
             context.getSharedPreferences("launcher", Context.MODE_PRIVATE).edit().putInt("ambient_minutes", minutes).apply();
             sendJson(out, state());
+        } else if (key.equals("POST /api/auto")) {
+            JSONObject o = new JSONObject(new String(req.body, "UTF-8"));
+            android.content.SharedPreferences.Editor e = context.getSharedPreferences("launcher", Context.MODE_PRIVATE).edit();
+            List<String> ids = Arrays.asList(MainActivity.LAUNCHER_IDS);
+            for (String b : new String[] {"autopilot", "day_arc", "photo_effects"}) {
+                if (o.has(b)) {
+                    e.putBoolean(b, o.getBoolean(b));
+                }
+            }
+            for (String k : new String[] {"autopilot_day", "autopilot_evening", "autopilot_holiday"}) {
+                if (o.has(k)) {
+                    String id = o.getString(k);
+                    boolean ok = ids.contains(id) || (k.equals("autopilot_holiday") && id.equals(Autopilot.NONE));
+                    if (!ok) {
+                        send(out, 400, "text/plain", ("Unknown launcher: " + id).getBytes("UTF-8"));
+                        return;
+                    }
+                    e.putString(k, id);
+                }
+            }
+            if (o.has("bedtime")) {
+                int h = o.getInt("bedtime");
+                if (h < -1 || h > 23) {
+                    send(out, 400, "text/plain", "Bedtime must be -1 or 0 to 23".getBytes("UTF-8"));
+                    return;
+                }
+                e.putInt("bedtime", h);
+            }
+            e.remove("autopilot_manual");   // new rules: let Autopilot choose afresh
+            e.apply();
+            Remote.settingsChanged();
+            sendJson(out, state());
         } else if (key.equals("POST /api/apps")) {
             JSONArray array = new JSONArray(new String(req.body, "UTF-8"));
             List<AppList.Item> items = new ArrayList<AppList.Item>();
@@ -360,6 +394,14 @@ class RemoteServer extends Thread {
         SharedPreferences prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE);
         state.put("launcher", prefs.getString("launcher", MainActivity.DEFAULT_LAUNCHER));
         state.put("ambientMinutes", MainActivity.ambientMinutes(context));
+        state.put("auto", new JSONObject()
+                .put("autopilot", Autopilot.enabled(context))
+                .put("autopilot_day", Autopilot.day(context))
+                .put("autopilot_evening", Autopilot.evening(context))
+                .put("autopilot_holiday", Autopilot.holiday(context))
+                .put("day_arc", DayArc.enabled(context))
+                .put("bedtime", DayArc.bedtime(context))
+                .put("photo_effects", PhotoEffects.enabled(context)));
         JSONArray launchers = new JSONArray();
         for (int i = 0; i < MainActivity.LAUNCHER_IDS.length; i++) {
             launchers.put(new JSONObject().put("id", MainActivity.LAUNCHER_IDS[i]).put("name", MainActivity.LAUNCHER_NAMES[i]));

@@ -269,9 +269,9 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
             }
             // A new loop starts from the keyframe before the clock and skips ahead to it,
             // so after a pause (or at sunset) the turn carries on where it was.
-            if (loop == null && resumed && !videoFailed && videoSurface != null) {
+            if (loop == null && resumed && !videoFailed && videoSurface != null && waitedForVideo(want, nowMs)) {
                 try {
-                    loop = new VideoLoop(getContext().getAssets(), want, videoSurface, clockUs);
+                    loop = new VideoLoop(getContext(), want, videoSurface, clockUs);
                     loopPath = want;
                 } catch (Exception e) {
                     Log.w(TAG, "no video, showing the sky only", e);
@@ -381,18 +381,30 @@ final class OrbitView extends GLSurfaceView implements GLSurfaceView.Renderer, S
 
     private final java.util.Map<String, Boolean> assets = new java.util.HashMap<String, Boolean>();
 
+    // The winter videos are optional: used only if bundled or downloaded.
     private boolean hasAsset(String path) {
         Boolean known = assets.get(path);
         if (known == null) {
-            try {
-                getContext().getAssets().openFd(path).close();
-                known = true;
-            } catch (Exception e) {
-                known = false;
-            }
+            known = Scenes.available(getContext(), path);
             assets.put(path, known);
         }
         return known;
+    }
+
+    private long videoCheckedAt;
+
+    // True once the video is on the TV. If it isn't yet, starts downloading it (see Scenes) and
+    // looks again every couple of seconds; meanwhile the still stays up.
+    private boolean waitedForVideo(String path, long nowMs) {
+        if (nowMs - videoCheckedAt < 2000) {
+            return false;
+        }
+        videoCheckedAt = nowMs;
+        if (Scenes.available(getContext(), path)) {
+            return true;
+        }
+        Scenes.fetch(getContext(), path);
+        return false;
     }
 
     private int u(String name) {

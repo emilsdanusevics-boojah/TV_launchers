@@ -52,6 +52,8 @@
   }
   .empty { color: var(--muted); font-size: 14px; }
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
+  .row select { min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #444); background: var(--chip); color: inherit; font: inherit; flex: 1; max-width: 16em; }
+  .row .seg { flex: 1; max-width: 16em; grid-template-columns: 1fr 1fr; }
   .row input[type=number] { min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #444); background: var(--chip); color: inherit; font: inherit; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
   figure { margin: 0; position: relative; border-radius: 10px; overflow: hidden; background: var(--chip); }
@@ -85,6 +87,12 @@
   <section>
     <h2>Launcher</h2>
     <div class="seg" id="launchers"></div>
+  </section>
+
+  <section>
+    <h2>Automatic</h2>
+    <div id="auto"></div>
+    <p class="hint"><b>Autopilot</b> picks the launcher by itself when the home screen comes back or ambient mode starts: one by day, another after sunset, another on red days. Choosing a launcher by hand wins until the next change. <b>Evening light</b> warms and dims the screen after sunset. At <b>bedtime</b>, if nobody's using the TV, it fades to black over ten minutes. <b>Weather on Photos</b>: rain on the glass, snow, frost below 0°, and holiday sparks.</p>
   </section>
 
   <section>
@@ -183,6 +191,9 @@ function render() {
     };
     seg.appendChild(b);
   }
+
+  // Automatic
+  renderAuto();
 
   // Ambient walker
   const pir = $("pirate");
@@ -349,6 +360,71 @@ $("pirateFile").addEventListener("change", async (e) => {
     toast("Couldn't upload: " + err.message);
   }
 });
+
+function renderAuto() {
+  const a = state.auto;
+  const box = $("auto");
+  box.innerHTML = "";
+  const save = async (change, message) => {
+    state = await api("POST", "/api/auto", change);
+    render();
+    toast(message);
+  };
+  const row = (label, el) => {
+    const r = document.createElement("div");
+    r.className = "row";
+    const l = document.createElement("span");
+    l.textContent = label;
+    l.style.minWidth = "8.5em";
+    r.append(l, el);
+    box.appendChild(r);
+  };
+  const toggle = (key, label) => {
+    const seg = document.createElement("div");
+    seg.className = "seg";
+    for (const on of [true, false]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = on ? "On" : "Off";
+      b.className = a[key] === on ? "on" : "";
+      b.setAttribute("aria-pressed", String(a[key] === on));
+      b.onclick = () => save({ [key]: on }, label + (on ? " on" : " off"));
+      seg.appendChild(b);
+    }
+    row(label, seg);
+  };
+  const pick = (key, label, extra) => {
+    const sel = document.createElement("select");
+    const options = state.launchers.map((l) => [l.id, l.name]);
+    if (extra) options.unshift(extra);
+    for (const [id, name] of options) {
+      const o = document.createElement("option");
+      o.value = id;
+      o.textContent = name;
+      o.selected = a[key] === id;
+      sel.appendChild(o);
+    }
+    sel.disabled = !a.autopilot;
+    sel.onchange = () => save({ [key]: sel.value }, label + ": " + sel.options[sel.selectedIndex].text);
+    row(label, sel);
+  };
+  toggle("autopilot", "Autopilot");
+  pick("autopilot_day", "By day");
+  pick("autopilot_evening", "After sunset");
+  pick("autopilot_holiday", "On red days", ["none", "Same as the time of day"]);
+  toggle("day_arc", "Evening light");
+  const bed = document.createElement("select");
+  for (const h of [-1, 21, 22, 23, 0, 1]) {
+    const o = document.createElement("option");
+    o.value = h;
+    o.textContent = h < 0 ? "Off" : String(h).padStart(2, "0") + ":00";
+    o.selected = a.bedtime === h;
+    bed.appendChild(o);
+  }
+  bed.onchange = () => save({ bedtime: parseInt(bed.value, 10) }, "Bedtime: " + bed.options[bed.selectedIndex].text);
+  row("Bedtime", bed);
+  toggle("photo_effects", "Weather on Photos");
+}
 
 async function upload(e, endpoint) {
   const files = [...e.target.files];

@@ -2,6 +2,15 @@
 
 A home screen for Android TV / Xiaomi TV with five looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
 
+## Automatic
+
+These run on their own, for every launcher. Each can be changed or turned off on the phone page (**Automatic**).
+
+- **Autopilot** picks the launcher for you: Photos by day, Fireplace after sunset and Monkey Island on red days (you choose which ones). It only switches when the home screen comes back or ambient mode starts, never while you're using it. If you choose a launcher yourself, Autopilot leaves it alone until the next change: from day to evening, evening to the next day, or onto a red day.
+- **Evening light (Day Arc)** follows the real sun over Riga. After sunset a warm, dim veil settles over the launcher, deeper after 23:00, and it lifts again at dawn. It's lighter on Fireplace and Apartment, which are evening scenes already.
+- **Bedtime** (off by default): from the chosen hour, once the TV is idle in ambient mode, the screen fades to black over ten minutes. After that the TV is allowed to go to sleep. Any button brings it back.
+- **Weather on Photos**: raindrops bead on the "glass" when it rains in Riga, snow drifts past when it snows, and frost creeps in from the corners below 0°. Holidays add their own touches: embers on Jāņi, gold sparkles at New Year, snow at Christmas, carmine and white petals on 4 May and 18 November, and blossom on spring holidays.
+
 ## Photos (default)
 
 The everyday launcher: quick to open, easy to use.
@@ -56,7 +65,7 @@ On top of it:
 
 The room is a pre-rendered video, so the motion is perfectly smooth: the TV's video decoder plays it, with each frame shown for exactly two screen refreshes, and the loop (2½ minutes at 30 frames per second: one view, a dissolve, the other view, a dissolve) has no seam. It's rendered with soft shading where surfaces meet and a glow around the lamps. Each frame holds the room on the left and, at half size top right, a mask of the solid parts, so the app can show its live sky through the windows; it draws the sky itself with one small shader. It starts at once by showing a still of the first frame until the video is running, draws at 1280×720 (the TV scales it up), and if the TV runs at 50 Hz it asks for 60 Hz so the 30 frames per second play evenly. Everything pauses while another app is open.
 
-The videos live in `assets/apartment` (`room_day`, `room_evening`, and `room_winter_day` / `room_winter_evening` when present), each with a `.jpg` still of its first frame. The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`, which renders the videos again in a headless browser (about an hour each; needs Node.js and ffmpeg). Each camera loop is rendered separately (`day`/`evening` for the first, `day2`/`evening2` for the second) and `web/join_loops.sh` dissolves them into one video. The lighting and camera code in `web/apartment.js` are kept. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
+The videos live in `scenes/apartment` (`room_day`, `room_evening`, and `room_winter_day` / `room_winter_evening` when present). They aren't packed into the APK; the TV downloads them the first time (see `Scenes.java`). Each has a `.jpg` still of its first frame in `assets/apartment`, which is built in. The model comes from the apartment page (three.js). To update it from a new version of that page, run `python3 web/import_model.py <Apartment.html>` and then `web/build.sh`, which renders the videos again in a headless browser (about an hour each; needs Node.js and ffmpeg). Each camera loop is rendered separately (`day`/`evening` for the first, `day2`/`evening2` for the second) and `web/join_loops.sh` dissolves them into one video. The lighting and camera code in `web/apartment.js` are kept. Text uses Hanken Grotesk (SIL Open Font License; see `assets/fonts/HankenGrotesk-OFL.txt`).
 
 - **Left/Right** moves along the apps. **OK** opens one; **long-press OK** opens its info page.
 - **Gear** (or **Menu** on the remote) opens a menu:
@@ -161,6 +170,7 @@ While the launcher is running, it serves a small page on your home Wi-Fi at **ht
 
 - switch launcher
 - set how long until ambient mode starts, or turn it off
+- set up Autopilot, evening light, bedtime and the weather on Photos
 - upload your own walk sprite sheet for Monkey Island's ambient mode
 - show, hide, reorder and rename apps
 - upload and delete photos for the Photos launcher
@@ -176,6 +186,8 @@ From version 7.2, updates need no computer:
 1. Download the new `MinimalTVLauncher.apk` to your phone.
 2. Open the phone page and, under **Update the launcher**, choose the file. The first time, the page asks you to allow updates: press **Open the setting on the TV**, turn on *Allow from this source* for the launcher on the TV, and press Back.
 3. The TV asks *"Do you want to install an update to this existing application?"*: press **Install** with the remote. The launcher restarts with the new version and the page says so.
+
+From 9.0 the APK is about 6 MB, so this is quick. The Apartment room videos (75 MB) are no longer inside it: the first time the Apartment launcher or its screensaver opens, the TV downloads them from this repository's `scenes/` folder. Until they arrive, it shows the room's still and "Fetching the room video" with a percentage under the clock. A dropped download carries on where it stopped. The fireplace video is small and stays built in.
 
 Keep the TV on the home screen while you do this. The TV only accepts an update signed with the same key as the installed launcher, so someone else on your Wi-Fi can't install a different app this way, and nothing installs without pressing Install on the TV.
 
@@ -249,7 +261,7 @@ python3 make_background.py res/drawable-nodpi/bg_default.png   # built-in backgr
 python3 make_pirate.py res/drawable-nodpi/pirate.png   # ambient-mode pirate
 python3 make_scenes.py res/drawable-nodpi              # ambient-mode scenes
 python3 make_verb_font.py src/com/minimal/tvlauncher/VerbFont.java   # verb font
-web/build.sh                               # 3D apartment -> assets/apartment/room_*.mp4 (needs Node.js, ffmpeg)
+web/build.sh                               # 3D apartment -> scenes/apartment/room_*.mp4 (needs Node.js, ffmpeg)
 ./build.sh                                 # -> MinimalTVLauncher.apk
 ```
 

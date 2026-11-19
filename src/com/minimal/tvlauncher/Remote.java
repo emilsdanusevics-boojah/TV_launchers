@@ -24,6 +24,9 @@ final class Remote {
 
         /** Monkey Island backgrounds or Photos photos were uploaded or deleted. */
         void onBackgroundsChanged();
+
+        /** Autopilot, evening light, bedtime or weather effects were changed. */
+        void onSettingsChanged();
     }
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
@@ -69,6 +72,17 @@ final class Remote {
             public void run() {
                 if (listener != null) {
                     listener.onBackgroundsChanged();
+                }
+            }
+        });
+    }
+
+    static void settingsChanged() {
+        MAIN.post(new Runnable() {
+            @Override
+            public void run() {
+                if (listener != null) {
+                    listener.onSettingsChanged();
                 }
             }
         });

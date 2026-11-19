@@ -1,7 +1,7 @@
 package com.minimal.tvlauncher;
 
 import android.content.res.AssetFileDescriptor;
-import android.content.res.AssetManager;
+import android.content.Context;
 import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
@@ -42,13 +42,18 @@ final class VideoLoop implements Runnable {
      * Opens the video at the keyframe at or before {@code atUs} (0 or more). Frames before
      * the first requested time are decoded but skipped.
      */
-    VideoLoop(AssetManager assets, String path, Surface surface, long atUs) throws Exception {
+    VideoLoop(Context context, String path, Surface surface, long atUs) throws Exception {
         this.surface = surface;
-        AssetFileDescriptor fd = assets.openFd(path);   // the video is stored uncompressed in the APK
-        try {
-            extractor.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
-        } finally {
-            fd.close();
+        java.io.File downloaded = Scenes.file(context, path);
+        if (downloaded.isFile()) {
+            extractor.setDataSource(downloaded.getPath());   // fetched from GitHub (see Scenes)
+        } else {
+            AssetFileDescriptor fd = context.getAssets().openFd(path);   // stored uncompressed in the APK
+            try {
+                extractor.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
+            } finally {
+                fd.close();
+            }
         }
         MediaFormat f = null;
         for (int i = 0; i < extractor.getTrackCount(); i++) {

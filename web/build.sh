@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Makes the Apartment launcher's videos: bundles web/apartment.js with three.js into a page,
 # then renders the room loop for day, evening and both again in winter
-# (web/render_video.js) into ../assets/apartment. Rendering is done in software
+# (web/render_video.js) into ../scenes/apartment (downloaded by the TV, see Scenes.java). Rendering is done in software
 # and takes about an hour per video.
 # Needs Node.js, Playwright's Chromium and ffmpeg; installs three@0.160.0 (the version the
 # original page used), esbuild and playwright.
@@ -12,6 +12,6 @@ page=$(mktemp -d)
 cp render.html "$page/index.html"
 npx esbuild apartment.js --bundle --minify --format=iife --target=es2017 --outfile="$page/apartment.js"
 for variant in day evening winter_day winter_evening; do
-  node render_video.js "$page" "$variant" "../assets/apartment/room_$variant.mp4"
+  node render_video.js "$page" "$variant" "../scenes/apartment/room_$variant.mp4"
 done
 rm -rf "$page"

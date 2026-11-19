@@ -90,7 +90,7 @@ final class FireView extends SurfaceView implements SurfaceHolder.Callback, Chor
             return;
         }
         try {
-            loop = new VideoLoop(getContext().getAssets(), path, surface, clockUs);
+            loop = new VideoLoop(getContext(), path, surface, clockUs);
             loop.setOnFirstFrame(new Runnable() {
                 @Override
                 public void run() {

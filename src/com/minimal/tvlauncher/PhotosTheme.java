@@ -82,6 +82,7 @@ class PhotosTheme implements LauncherTheme {
     private View bottomShade;
     private LinearLayout corner;
     private AmbientClock ambientClock;
+    private PhotoEffects effects;
     private List<Apps.Entry> apps;
     private int accent = ACCENT;
     private int ink = ACCENT_INK;
@@ -139,6 +140,9 @@ class PhotosTheme implements LauncherTheme {
         front = photoView();
         root.addView(back, new FrameLayout.LayoutParams(-1, -1));
         root.addView(front, new FrameLayout.LayoutParams(-1, -1));
+        // Rain on the glass, snow, frost, holiday sparks: over the photos, under the text.
+        effects = new PhotoEffects(activity);
+        root.addView(effects, new FrameLayout.LayoutParams(-1, -1));
 
         // Shades so the text and tiles read on any photo.
         cornerShade = PanelMenu.cornerShade(activity, 0xB0000000, 560);
@@ -231,6 +235,11 @@ class PhotosTheme implements LauncherTheme {
 
         loadPhotoList();
         return root;
+    }
+
+    /** The weather effects were turned on or off on the phone. */
+    void refreshEffects() {
+        effects.refresh();
     }
 
     @Override
@@ -369,6 +378,7 @@ class PhotosTheme implements LauncherTheme {
 
     @Override
     public void onResume() {
+        effects.start();
         handler.removeCallbacks(weatherTimer);
         weatherTimer.run();
         showHoliday();
@@ -386,6 +396,7 @@ class PhotosTheme implements LauncherTheme {
 
     @Override
     public void onPause() {
+        effects.stop();
         handler.removeCallbacks(weatherTimer);
         handler.removeCallbacks(nextPhoto);
         back.animate().cancel();
@@ -587,6 +598,9 @@ class PhotosTheme implements LauncherTheme {
     // ---- Weather, holidays ----
 
     private void showWeather(Weather.Now now) {
+        if (effects != null) {
+            effects.setWeather(now);
+        }
         weatherLine.setText(now == null ? "" : now.line());
         weatherLine.setVisibility(now == null ? View.GONE : View.VISIBLE);
         if (now != null) {
@@ -603,6 +617,7 @@ class PhotosTheme implements LauncherTheme {
     private void showHoliday() {
         Holidays.Day day = holidaysOn() ? Holidays.today() : null;
         String key = day == null ? "" : day.id;
+        effects.setHoliday(day == null ? null : day.id);
         if (key.equals(shownHoliday)) {
             return;
         }

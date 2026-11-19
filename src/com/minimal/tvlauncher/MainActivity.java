@@ -29,6 +29,9 @@ import java.util.List;
  * goes into ambient mode: just its picture and a dim clock. Any button brings it back; that
  * press does nothing else.
  *
+ * Day Arc (see DayArc) warms and dims every launcher after sunset and fades it to black at
+ * bedtime; Autopilot (see Autopilot) picks the launcher by time of day and red days.
+ *
  * It also runs the phone page (see RemoteServer) and picks up changes made there or in
  * EditAppsActivity.
  */
@@ -59,6 +62,9 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     private boolean dismissed;       // Back pressed on the record; stays hidden until music next starts
     private boolean resumed;
     private boolean ambient;
+    private DayArc dayArc;
+    // Set before the activity is rebuilt for Autopilot in ambient mode: go straight back into it.
+    private static boolean resumeAmbient;
     private int swallowKeyUp = -1;   // the key that woke ambient mode; its release is ignored too
     private long lastPressAt;
 
@@ -85,10 +91,10 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
                 handler.postDelayed(this, 60000);
                 return;
             }
-            ambient = true;
-            active().setAmbient(true);
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            handler.postDelayed(releaseScreen, AMBIENT_KEEPS_SCREEN_ON_MS);
+            if (autopilot(true)) {
+                return;   // rebuilding with another launcher; it goes into ambient mode itself
+            }
+            enterAmbient();
         }
     };
 
@@ -111,6 +117,13 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         @Override
         public void onReceive(Context context, Intent intent) {
             active().onTimeChanged();
+            dayArc.update(MainActivity.this);
+            if (ambient) {
+                // Nobody's using it: the launcher may change with the evening, and bedtime may come.
+                if (!autopilot(true)) {
+                    checkBedtime();
+                }
+            }
         }
     };
 
@@ -130,6 +143,11 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         super.onCreate(savedInstanceState);
         settings = getSharedPreferences("launcher", MODE_PRIVATE);
         launcher = settings.getString("launcher", DEFAULT_LAUNCHER);
+        String auto = Autopilot.choose(this, launcher);
+        if (auto != null) {
+            launcher = auto;
+            settings.edit().putString("launcher", auto).apply();
+        }
         if ("monkey_island".equals(launcher)) {
             base = new MonkeyIslandTheme(this);
         } else if ("vinyl".equals(launcher)) {
@@ -144,6 +162,9 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         container = new FrameLayout(this);
         baseView = base.createView();
         container.addView(baseView, new FrameLayout.LayoutParams(-1, -1));
+        dayArc = new DayArc(this);
+        dayArc.setStrength(veilStrength(launcher));
+        container.addView(dayArc, new FrameLayout.LayoutParams(-1, -1));
         setContentView(container);
         apps = Apps.load(this);
         base.setApps(apps);
@@ -171,6 +192,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
 
     /** Remembers the chosen launcher and rebuilds the home screen with it. */
     void switchLauncher(String id) {
+        Autopilot.choseByHand(this);
         if (id.equals(launcher)) {
             if (showingVinyl) {
                 dismissed = true;
@@ -214,6 +236,14 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         }
     }
 
+    @Override
+    public void onSettingsChanged() {
+        dayArc.update(this);
+        if (base instanceof PhotosTheme) {
+            ((PhotosTheme) base).refreshEffects();
+        }
+    }
+
     private LauncherTheme active() {
         return showingVinyl ? vinyl : base;
     }
@@ -253,10 +283,11 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             active().onPause();
         }
         showingVinyl = show;
+        dayArc.setStrength(veilStrength(show ? "vinyl" : launcher));
         if (vinylView == null) {
             vinylView = vinyl.createView();
             vinyl.setApps(apps);
-            container.addView(vinylView, new FrameLayout.LayoutParams(-1, -1));
+            container.addView(vinylView, container.indexOfChild(dayArc), new FrameLayout.LayoutParams(-1, -1));
         }
         vinylView.animate().cancel();
         if (show) {
@@ -304,7 +335,21 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             active().onTimeChanged();
             active().onResume();
         }
+        dayArc.update(this);
         restartIdleTimer();
+        if (resumeAmbient) {
+            resumeAmbient = false;
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (resumed && !ambient) {
+                        enterAmbient();
+                    }
+                }
+            });
+        } else {
+            autopilot(false);
+        }
     }
 
     @Override
@@ -390,9 +435,58 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         }
     }
 
+    private void enterAmbient() {
+        ambient = true;
+        active().setAmbient(true);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        handler.postDelayed(releaseScreen, AMBIENT_KEEPS_SCREEN_ON_MS);
+        checkBedtime();
+    }
+
+    // Past bedtime with nobody watching: fade to black, then let the TV sleep.
+    private void checkBedtime() {
+        if (ambient && DayArc.pastBedtime(this, new java.util.Date())) {
+            dayArc.candleOut();
+            handler.removeCallbacks(releaseScreen);
+            handler.postDelayed(releaseScreen, DayArc.CANDLE_OUT_MS);
+        }
+    }
+
+    /**
+     * Switches to the launcher Autopilot wants, if it's another one. Returns true if the home
+     * screen is being rebuilt. {@code thenAmbient}: the new launcher starts in ambient mode.
+     */
+    private boolean autopilot(boolean thenAmbient) {
+        String next = Autopilot.choose(this, launcher);
+        if (next == null || showingVinyl) {
+            return false;
+        }
+        settings.edit().putString("launcher", next).commit();
+        resumeAmbient = thenAmbient;
+        recreate();
+        return true;
+    }
+
+    // How strongly Day Arc's evening veil shows on each launcher.
+    private static float veilStrength(String id) {
+        if ("apartment".equals(id)) {
+            return 0.4f;    // has its own evening lamps
+        } else if ("fireplace".equals(id)) {
+            return 0.5f;
+        } else if ("vinyl".equals(id)) {
+            return 0.7f;
+        } else if ("monkey_island".equals(id)) {
+            return 0.8f;
+        }
+        return 1f;
+    }
+
     private void leaveAmbient() {
         handler.removeCallbacks(releaseScreen);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (dayArc != null) {
+            dayArc.relight();
+        }
         if (ambient) {
             ambient = false;
             active().setAmbient(false);

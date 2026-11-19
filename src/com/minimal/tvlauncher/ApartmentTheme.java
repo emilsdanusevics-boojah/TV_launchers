@@ -55,6 +55,7 @@ class ApartmentTheme implements LauncherTheme {
     private TextView date;
     private TextView weatherLine;
     private TextView holidayLine;
+    private TextView fetchLine;      // "Fetching the room video · 34%" the first time
     private LinearLayout bar;
     private LinearLayout appRow;
     private ImageView gear;
@@ -62,6 +63,19 @@ class ApartmentTheme implements LauncherTheme {
     private View shade;
     private LinearLayout clock;
     private AmbientClock ambientClock;
+
+    // While the room video downloads (the first time only), say so under the clock.
+    private final Runnable fetchTimer = new Runnable() {
+        @Override
+        public void run() {
+            String p = Scenes.anyProgress();
+            fetchLine.setVisibility(p == null ? View.GONE : View.VISIBLE);
+            if (p != null) {
+                fetchLine.setText("Fetching the room video · " + p);
+            }
+            handler.postDelayed(this, 2000);
+        }
+    };
 
     private final Runnable weatherTimer = new Runnable() {
         @Override
@@ -119,6 +133,9 @@ class ApartmentTheme implements LauncherTheme {
         holidayLine = PanelMenu.text(activity, medium, 16, ACCENT);
         holidayLine.setVisibility(View.GONE);
         clock.addView(holidayLine, under(6));
+        fetchLine = PanelMenu.text(activity, medium, 13, MUTED);
+        fetchLine.setVisibility(View.GONE);
+        clock.addView(fetchLine, under(10));
         // A soft shadow keeps the text readable over the room.
         for (TextView t : new TextView[] {time, date, weatherLine, holidayLine}) {
             t.setShadowLayer(dp(6), 0, dp(1), 0x99000000);
@@ -239,6 +256,8 @@ class ApartmentTheme implements LauncherTheme {
         weatherTimer.run();
         showHoliday();
         orbit.onResume();
+        handler.removeCallbacks(fetchTimer);
+        handler.postDelayed(fetchTimer, 1000);
         if (!menu.isOpen() && !gear.hasFocus()) {
             focusFirst();
         }
@@ -247,6 +266,7 @@ class ApartmentTheme implements LauncherTheme {
     @Override
     public void onPause() {
         handler.removeCallbacks(weatherTimer);
+        handler.removeCallbacks(fetchTimer);
         // Stop the video and drawing while an app is in front.
         orbit.onPause();
     }
@@ -283,6 +303,7 @@ class ApartmentTheme implements LauncherTheme {
     @Override
     public void onDestroy() {
         handler.removeCallbacks(weatherTimer);
+        handler.removeCallbacks(fetchTimer);
         orbit.release();
     }
 
