@@ -153,7 +153,7 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
         // The verbs and apps make way for a pirate taking a walk along the coast.
         if (ambient) {
             scumm.reset();
-            pirate.setLines(holidayLines());
+            pirate.setLines(pirateLines());
             pirate.start();
         } else {
             pirate.stop();
@@ -212,6 +212,19 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
     }
 
     // ---- Holidays ----
+
+    // The holiday lines, plus a reminder of today's people's days and notes from the phone page.
+    private String[] pirateLines() {
+        List<String> lines = new ArrayList<String>();
+        String[] holiday = holidayLines();
+        if (holiday != null) {
+            lines.addAll(Arrays.asList(holiday));
+        }
+        for (String l : Board.todayLines(activity, java.util.Calendar.getInstance())) {
+            lines.add("Don't forget: " + l + ".");
+        }
+        return lines.isEmpty() ? null : lines.toArray(new String[0]);
+    }
 
     // Today's lines, or null on an ordinary day (or with holidays turned off in the
     // Apartment launcher's Holidays menu).

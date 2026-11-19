@@ -192,7 +192,10 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
 
     /** Remembers the chosen launcher and rebuilds the home screen with it. */
     void switchLauncher(String id) {
-        Autopilot.choseByHand(this);
+        String learned = Autopilot.choseByHand(this, id);
+        if (learned != null) {
+            android.widget.Toast.makeText(this, learned, android.widget.Toast.LENGTH_LONG).show();
+        }
         if (id.equals(launcher)) {
             if (showingVinyl) {
                 dismissed = true;
@@ -241,6 +244,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         dayArc.update(this);
         if (base instanceof PhotosTheme) {
             ((PhotosTheme) base).refreshEffects();
+            ((PhotosTheme) base).refreshBoard();
         }
     }
 

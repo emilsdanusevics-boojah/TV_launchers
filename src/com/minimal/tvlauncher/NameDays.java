@@ -26,6 +26,12 @@ final class NameDays {
         return load(context).get(key);
     }
 
+    /** Whose name day it is on a given day; null if nobody's. */
+    static String on(Context context, Calendar day) {
+        String key = String.format(java.util.Locale.ROOT, "%02d-%02d", day.get(Calendar.MONTH) + 1, day.get(Calendar.DAY_OF_MONTH));
+        return load(context).get(key);
+    }
+
     private static synchronized Map<String, String> load(Context context) {
         if (days == null) {
             days = new HashMap<String, String>();

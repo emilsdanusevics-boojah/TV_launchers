@@ -30,7 +30,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -92,6 +95,11 @@ class PhotosTheme implements LauncherTheme {
     private final List<String> photos = new ArrayList<String>();
     private final Map<String, String> credits = new HashMap<String, String>();
     private boolean builtIn;
+    private final Map<String, PhotoInfo> infos = new HashMap<String, PhotoInfo>();   // uploaded photos' info
+    private final List<String> recent = new ArrayList<String>();   // shown lately; not again soon
+    private long lastMemoryAt;
+    private final Random pick = new Random();
+    private TextView board;
     private int photoIndex = -1;
     private int screenW = 1920, screenH = 1080;
     private int request;
@@ -170,7 +178,13 @@ class PhotosTheme implements LauncherTheme {
         corner.addView(names, under(6));
         corner.addView(weatherLine, under(8));
         corner.addView(holidayLine, under(6));
-        for (TextView t : new TextView[] {time, date, names, weatherLine, holidayLine}) {
+        // People's days and notes from the phone page.
+        board = PanelMenu.text(activity, medium, 15, FG);
+        board.setSingleLine(false);
+        board.setLineSpacing(dp(4), 1f);
+        board.setVisibility(View.GONE);
+        corner.addView(board, under(12));
+        for (TextView t : new TextView[] {time, date, names, weatherLine, holidayLine, board}) {
             t.setShadowLayer(dp(8), 0, dp(1), 0xAA000000);
         }
         FrameLayout.LayoutParams cornerParams = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
@@ -373,6 +387,7 @@ class PhotosTheme implements LauncherTheme {
         names.setText(today == null ? "" : "Vārda dienas · " + today);
         names.setVisibility(today == null ? View.GONE : View.VISIBLE);
         showHoliday();
+        showBoard();
         ambientClock.tick();
     }
 
@@ -457,6 +472,8 @@ class PhotosTheme implements LauncherTheme {
 
     private void loadPhotoList() {
         photos.clear();
+        infos.clear();
+        recent.clear();
         builtIn = false;
         File dir = photosDir();
         File[] files = dir == null ? null : dir.listFiles();
@@ -465,8 +482,12 @@ class PhotosTheme implements LauncherTheme {
             for (File f : files) {
                 String name = f.getName().toLowerCase(Locale.ROOT);
                 int dot = name.lastIndexOf('.');
-                if (f.isFile() && dot > 0 && IMAGE_TYPES.contains(name.substring(dot + 1))) {
+                if (f.isFile() && dot > 0 && IMAGE_TYPES.contains(name.substring(dot + 1)) && !name.startsWith(".")) {
                     photos.add(f.getPath());
+                    PhotoInfo info = PhotoInfo.read(f);
+                    if (info != null) {
+                        infos.put(f.getPath(), info);
+                    }
                 }
             }
         }
@@ -500,8 +521,8 @@ class PhotosTheme implements LauncherTheme {
         if (photos.isEmpty()) {
             return;
         }
-        photoIndex = (photoIndex + 1) % photos.size();
-        final String photo = photos.get(photoIndex);
+        final String[] caption = new String[1];
+        final String photo = choose(caption);
         final boolean asset = builtIn;
         final int req = ++request;
         new Thread(new Runnable() {
@@ -515,13 +536,140 @@ class PhotosTheme implements LauncherTheme {
                             return;
                         }
                         if (bitmap != null) {
-                            crossfade(bitmap, asset ? credits.get(photo) : null);
+                            crossfade(bitmap, asset ? credits.get(photo) : caption[0]);
                         }
                         handler.postDelayed(nextPhoto, PHOTO_MS);
                     }
                 });
             }
         }).start();
+    }
+
+    // Which photo next, and its caption ("from Anna", "2 years ago"):
+    //   1. a photo sent from the phone in the last week that hasn't been on screen yet
+    //   2. about once an hour, one taken this week in an earlier year
+    //   3. otherwise a random one, not shown lately, favouring photos that match the outside:
+    //      the same time of year, snowy ones when it snows or freezes, warm and dark ones in
+    //      the evening, bright ones by day.
+    private String choose(String[] caption) {
+        if (builtIn || infos.isEmpty()) {
+            photoIndex = (photoIndex + 1) % photos.size();
+            return photos.get(photoIndex);
+        }
+        long now = System.currentTimeMillis();
+        SharedPreferences prefs = activity.getSharedPreferences("launcher", MainActivity.MODE_PRIVATE);
+        Set<String> seen = new HashSet<String>(prefs.getStringSet("photos_seen_new", new HashSet<String>()));
+        String chosen = null;
+        for (String path : photos) {
+            PhotoInfo i = infos.get(path);
+            if (i != null && now - i.uploaded < 7 * 86400000L && !seen.contains(path)) {
+                chosen = path;
+                break;
+            }
+        }
+        boolean memory = false;
+        if (chosen == null && now - lastMemoryAt > 60 * 60 * 1000) {
+            Calendar today = Calendar.getInstance();
+            List<String> memories = new ArrayList<String>();
+            for (String path : photos) {
+                PhotoInfo i = infos.get(path);
+                if (i != null && i.taken > 0 && !recent.contains(path)) {
+                    Calendar t = Calendar.getInstance();
+                    t.setTimeInMillis(i.taken);
+                    int days = Math.abs(t.get(Calendar.DAY_OF_YEAR) - today.get(Calendar.DAY_OF_YEAR));
+                    if (t.get(Calendar.YEAR) < today.get(Calendar.YEAR) && Math.min(days, 365 - days) <= 3) {
+                        memories.add(path);
+                    }
+                }
+            }
+            if (!memories.isEmpty()) {
+                chosen = memories.get(pick.nextInt(memories.size()));
+                memory = true;
+                lastMemoryAt = now;
+            }
+        }
+        if (chosen == null) {
+            chosen = weightedPick(now);
+        }
+        // Remember it, so it isn't shown again too soon (and isn't "new" any more).
+        recent.add(chosen);
+        while (recent.size() > Math.min(10, photos.size() / 2)) {
+            recent.remove(0);
+        }
+        if (!seen.contains(chosen)) {
+            seen.add(chosen);
+            seen.retainAll(photos);
+            prefs.edit().putStringSet("photos_seen_new", seen).apply();
+        }
+        PhotoInfo i = infos.get(chosen);
+        StringBuilder c = new StringBuilder();
+        if (memory && i != null) {
+            Calendar t = Calendar.getInstance();
+            t.setTimeInMillis(i.taken);
+            int years = Calendar.getInstance().get(Calendar.YEAR) - t.get(Calendar.YEAR);
+            c.append(years == 1 ? "A year ago this week" : years + " years ago this week");
+        }
+        if (i != null && !i.from.isEmpty()) {
+            c.append(c.length() > 0 ? " · " : "").append("from ").append(i.from);
+        }
+        caption[0] = c.length() > 0 ? c.toString() : null;
+        photoIndex = Math.max(0, photos.indexOf(chosen));   // started (see onResume)
+        return chosen;
+    }
+
+    private String weightedPick(long now) {
+        Weather.Now w = Weather.cached();
+        boolean wintry = w != null && ("snow".equals(w.code) || w.tempC < 0);
+        boolean dark = DayArc.dark(new Date(now));
+        int month = Calendar.getInstance().get(Calendar.MONTH);
+        double total = 0;
+        double[] weights = new double[photos.size()];
+        for (int k = 0; k < photos.size(); k++) {
+            String path = photos.get(k);
+            if (recent.contains(path) && photos.size() > 1) {
+                continue;
+            }
+            double weight = 1;
+            PhotoInfo i = infos.get(path);
+            if (i != null) {
+                if (i.taken > 0) {
+                    Calendar t = Calendar.getInstance();
+                    t.setTimeInMillis(i.taken);
+                    int d = Math.abs(t.get(Calendar.MONTH) - month);
+                    d = Math.min(d, 12 - d);
+                    weight += d == 0 ? 2 : d == 1 ? 1 : 0;
+                }
+                if (wintry) {
+                    weight += i.white * 6;
+                }
+                weight += dark ? (1 - i.bright) + Math.max(0, i.warm) * 4 : i.bright;
+            }
+            weights[k] = weight;
+            total += weight;
+        }
+        double r = pick.nextDouble() * total;
+        for (int k = 0; k < photos.size(); k++) {
+            r -= weights[k];
+            if (weights[k] > 0 && r <= 0) {
+                return photos.get(k);
+            }
+        }
+        return photos.get(pick.nextInt(photos.size()));
+    }
+
+    private void showBoard() {
+        List<String> lines = Board.lines(activity, Calendar.getInstance());
+        board.setVisibility(lines.isEmpty() ? View.GONE : View.VISIBLE);
+        StringBuilder b = new StringBuilder();
+        for (String l : lines) {
+            b.append(b.length() > 0 ? "\n" : "").append("•  ").append(l);
+        }
+        board.setText(b.toString());
+    }
+
+    /** People or notes were changed on the phone. */
+    void refreshBoard() {
+        showBoard();
     }
 
     // Decoded a little larger than the screen (for the zoom), no bigger.

@@ -6,7 +6,7 @@ A home screen for Android TV / Xiaomi TV with five looks. You can switch between
 
 These run on their own, for every launcher. Each can be changed or turned off on the phone page (**Automatic**).
 
-- **Autopilot** picks the launcher for you: Photos by day, Fireplace after sunset and Monkey Island on red days (you choose which ones). It only switches when the home screen comes back or ambient mode starts, never while you're using it. If you choose a launcher yourself, Autopilot leaves it alone until the next change: from day to evening, evening to the next day, or onto a red day.
+- **Autopilot** picks the launcher for you: Photos by day, Fireplace after sunset and Monkey Island on red days (you choose which ones). It only switches when the home screen comes back or ambient mode starts, never while you're using it. If you choose a launcher yourself, Autopilot leaves it alone until the next change: from day to evening, evening to the next day, or onto a red day. Choose the same launcher in the same part of the day on two different days and Autopilot learns it: that becomes the launcher for that part of the day, and the TV says so.
 - **Evening light (Day Arc)** follows the real sun over Riga. After sunset a warm, dim veil settles over the launcher, deeper after 23:00, and it lifts again at dawn. It's lighter on Fireplace and Apartment, which are evening scenes already.
 - **Bedtime** (off by default): from the chosen hour, once the TV is idle in ambient mode, the screen fades to black over ten minutes. After that the TV is allowed to go to sleep. Any button brings it back.
 - **Weather on Photos**: raindrops bead on the "glass" when it rains in Riga, snow drifts past when it snows, and frost creeps in from the corners below 0°. Holidays add their own touches: embers on Jāņi, gold sparkles at New Year, snow at Christmas, carmine and white petals on 4 May and 18 November, and blossom on spring holidays.
@@ -16,6 +16,16 @@ These run on their own, for every launcher. Each can be changed or turned off on
 The everyday launcher: quick to open, easy to use.
 
 - A full-screen photo that slowly drifts and zooms, crossfading to the next every 45 seconds. Upload your own photos from the phone page; until you do, it shows built-in pictures of the apartment.
+- Uploaded photos aren't shown in a fixed order:
+  - **New first:** a photo sent in the last week is shown before anything else, captioned "from" and the name typed on the phone page.
+  - **Years ago:** about once an hour, a photo taken this week in an earlier year appears ("2 years ago this week"). The date comes from the photo's camera data, or else from the file's date on the phone.
+  - **Matched to the moment:** otherwise it picks at random, without repeating recent ones, and favours photos that suit the moment: the same time of year, snowy ones when it snows or freezes, warm and dark ones in the evening, bright ones by day.
+- **People & notes** from the phone page appear under the weather, up to four lines:
+  - name days and birthdays of the people you add, the day before ("Tomorrow: Dad's name day (Mārtiņš)") and on the day
+  - weekly or monthly notes (bins, meter readings) the day before and on the day
+  - standing notes (a shopping item) until you remove them
+
+  In ambient mode, the Monkey Island pirate reminds you of today's.
 - A large clock, the date, today's **Latvian name days** (vārda dienas, e.g. "Vārda dienas · Mārtiņš, Mārcis, Markuss, Marks") and the weather with a small icon, in the top-left.
 - Your apps as large tiles along the bottom, showing each app's TV banner (or its icon and name). The focused tile grows and gets an outline.
 - On red days (see Holidays below) a greeting appears and the tiles' outline takes the holiday's colour.
@@ -171,6 +181,7 @@ While the launcher is running, it serves a small page on your home Wi-Fi at **ht
 - switch launcher
 - set how long until ambient mode starts, or turn it off
 - set up Autopilot, evening light, bedtime and the weather on Photos
+- add people (name days, birthdays) and notes for the Photos launcher
 - upload your own walk sprite sheet for Monkey Island's ambient mode
 - show, hide, reorder and rename apps
 - upload and delete photos for the Photos launcher

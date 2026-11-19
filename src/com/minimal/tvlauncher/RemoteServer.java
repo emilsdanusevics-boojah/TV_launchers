@@ -37,6 +37,7 @@ import java.util.concurrent.Executors;
  *   POST   /api/launcher             {"id": "..."}
  *   POST   /api/auto                 any of {"autopilot": bool, "autopilot_day"/"autopilot_evening"/"autopilot_holiday": id or "none",
  *                                     "day_arc": bool, "bedtime": hour or -1, "photo_effects": bool}
+ *   POST   /api/board                {"people": [{"name", "who", "birthday": "MM-DD"}], "notes": [{"text", "repeat": "once"|"weekly"|"monthly", "day"}]}
  *   POST   /api/apps                 [{"pkg": "...", "name": "..."}, ...]
  *   POST   /api/ambient              {"minutes": n}   minutes without the remote before ambient mode; 0 = off
  *   GET    /api/background?name=x    one background image
@@ -322,6 +323,15 @@ class RemoteServer extends Thread {
             e.apply();
             Remote.settingsChanged();
             sendJson(out, state());
+        } else if (key.equals("POST /api/board")) {
+            try {
+                Board.save(context, new JSONObject(new String(req.body, "UTF-8")));
+            } catch (IllegalArgumentException e) {
+                send(out, 400, "text/plain", e.getMessage().getBytes("UTF-8"));
+                return;
+            }
+            Remote.settingsChanged();
+            sendJson(out, state());
         } else if (key.equals("POST /api/apps")) {
             JSONArray array = new JSONArray(new String(req.body, "UTF-8"));
             List<AppList.Item> items = new ArrayList<AppList.Item>();
@@ -394,6 +404,7 @@ class RemoteServer extends Thread {
         SharedPreferences prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE);
         state.put("launcher", prefs.getString("launcher", MainActivity.DEFAULT_LAUNCHER));
         state.put("ambientMinutes", MainActivity.ambientMinutes(context));
+        state.put("board", Board.load(context));
         state.put("auto", new JSONObject()
                 .put("autopilot", Autopilot.enabled(context))
                 .put("autopilot_day", Autopilot.day(context))
@@ -552,10 +563,21 @@ class RemoteServer extends Thread {
             } finally {
                 fos.close();
             }
+            if (dir.equals(photosDir())) {
+                // Who sent it, when it was taken and how it looks, for the slideshow's choices.
+                long taken = 0;
+                try {
+                    taken = Long.parseLong(req.query.get("taken"));
+                } catch (Exception ignored) {
+                    taken = 0;
+                }
+                PhotoInfo.analyse(file, req.query.get("from"), taken);
+            }
             Remote.backgroundsChanged();
             sendJson(out, state());
         } else if (req.method.equals("DELETE")) {
             file.delete();
+            PhotoInfo.sidecar(file).delete();
             Remote.backgroundsChanged();
             sendJson(out, state());
         } else {

@@ -54,6 +54,7 @@
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
   .row select { min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #444); background: var(--chip); color: inherit; font: inherit; flex: 1; max-width: 16em; }
   .row .seg { flex: 1; max-width: 16em; grid-template-columns: 1fr 1fr; }
+  .row input[type=text] { min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #444); background: var(--chip); color: inherit; font: inherit; flex: 1; min-width: 8em; }
   .row input[type=number] { min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line, #444); background: var(--chip); color: inherit; font: inherit; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
   figure { margin: 0; position: relative; border-radius: 10px; overflow: hidden; background: var(--chip); }
@@ -96,6 +97,29 @@
   </section>
 
   <section>
+    <h2>People &amp; notes</h2>
+    <div id="people"></div>
+    <div class="row">
+      <input type="text" id="personName" maxlength="80" placeholder="Name, e.g. Mārtiņš" aria-label="Name">
+      <input type="text" id="personWho" maxlength="80" placeholder="Who, e.g. Dad" aria-label="Who they are">
+      <input type="text" id="personBirthday" maxlength="5" placeholder="Birthday MM-DD" aria-label="Birthday, month-day" inputmode="numeric">
+      <button type="button" id="addPerson">Add person</button>
+    </div>
+    <div id="notes" style="margin-top: 14px"></div>
+    <div class="row">
+      <input type="text" id="noteText" maxlength="80" placeholder="Note, e.g. Water meter readings" aria-label="Note">
+      <select id="noteRepeat" aria-label="When">
+        <option value="once">Always</option>
+        <option value="weekly">Every week</option>
+        <option value="monthly">Every month</option>
+      </select>
+      <select id="noteDay" aria-label="Day" hidden></select>
+      <button type="button" id="addNote">Add note</button>
+    </div>
+    <p class="hint">Shown under the clock on the Photos launcher. Name days and birthdays appear the day before ("Tomorrow: Dad's name day") and on the day. Weekly and monthly notes also appear the day before and on the day. In ambient mode the Monkey Island pirate reminds you of today's.</p>
+  </section>
+
+  <section>
     <h2>Ambient mode</h2>
     <div class="seg" id="ambient"></div>
     <p class="hint">After this long without the remote, the launcher puts its buttons away and shows only its picture and a small clock (on Monkey Island, a pirate takes a walk). Any button brings it back.</p>
@@ -114,8 +138,12 @@
   <section>
     <h2>Photos</h2>
     <div class="grid photos" id="photos"></div>
+    <div class="row">
+      <label for="photoFrom">From</label>
+      <input type="text" id="photoFrom" maxlength="40" placeholder="Your name (optional)" autocomplete="given-name">
+    </div>
     <label class="upload"><input type="file" id="photoFiles" accept="image/*" multiple><span>Upload photos</span></label>
-    <p class="hint">For the Photos launcher, shown in name order, a new one every 45 seconds. Landscape photos look best. With none uploaded it shows its built-in photos of Riga.</p>
+    <p class="hint">For the Photos launcher, a new one every 45 seconds. New photos are shown first, with "from" and your name. About once an hour it shows one taken this week in an earlier year. Otherwise it favours photos that suit the moment: the same time of year, snowy ones when it snows, warm ones in the evening. Landscape photos look best. With none uploaded it shows its built-in photos.</p>
   </section>
 
   <section>
@@ -194,6 +222,9 @@ function render() {
 
   // Automatic
   renderAuto();
+
+  // People & notes
+  renderBoard();
 
   // Ambient walker
   const pir = $("pirate");
@@ -361,6 +392,96 @@ $("pirateFile").addEventListener("change", async (e) => {
   }
 });
 
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function noteWhen(n) {
+  if (n.repeat === "weekly") return "every " + WEEKDAYS[n.day - 1];
+  if (n.repeat === "monthly") return "every month on the " + n.day + (n.day === 1 || n.day === 21 || n.day === 31 ? "st" : n.day === 2 || n.day === 22 ? "nd" : n.day === 3 || n.day === 23 ? "rd" : "th");
+  return "always";
+}
+
+async function saveBoard(message) {
+  try {
+    state = await api("POST", "/api/board", state.board);
+    render();
+    toast(message);
+  } catch (err) {
+    toast(err.message);
+    state = await api("GET", "/api/state");
+    render();
+  }
+}
+
+function boardList(box, items, describe, emptyText) {
+  box.innerHTML = "";
+  if (!items.length) {
+    box.innerHTML = '<p class="empty">' + emptyText + "</p>";
+    return;
+  }
+  items.forEach((item, i) => {
+    const r = document.createElement("div");
+    r.className = "row";
+    const t = document.createElement("span");
+    t.textContent = describe(item);
+    t.style.flex = "1";
+    const del = button("✕", "Remove", false, () => { items.splice(i, 1); saveBoard("Removed"); });
+    r.append(t, del);
+    box.appendChild(r);
+  });
+}
+
+function renderBoard() {
+  const b = state.board || { people: [], notes: [] };
+  state.board = b;
+  boardList($("people"), b.people, (p) => p.name + (p.who ? " · " + p.who : "") + (p.birthday ? " · birthday " + p.birthday : ""),
+    "No people yet. Add the people whose name days and birthdays matter to you.");
+  boardList($("notes"), b.notes, (n) => n.text + " · " + noteWhen(n), "No notes yet.");
+  fillNoteDays();
+}
+
+function fillNoteDays() {
+  const repeat = $("noteRepeat").value;
+  const day = $("noteDay");
+  day.hidden = repeat === "once";
+  const opts = repeat === "weekly" ? WEEKDAYS.map((d, i) => [i + 1, d]) : Array.from({ length: 31 }, (_, i) => [i + 1, String(i + 1)]);
+  if (day.dataset.kind !== repeat) {
+    day.innerHTML = "";
+    for (const [v, t] of opts) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = t;
+      day.appendChild(o);
+    }
+    day.dataset.kind = repeat;
+  }
+}
+
+$("noteRepeat").onchange = fillNoteDays;
+
+$("addPerson").onclick = () => {
+  const name = $("personName").value.trim();
+  const birthday = $("personBirthday").value.trim();
+  if (!name) { toast("Type a name first"); return; }
+  if (birthday && !/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(birthday)) { toast("Birthday as MM-DD, e.g. 03-14"); return; }
+  state.board.people.push({ name, who: $("personWho").value.trim(), birthday });
+  $("personName").value = $("personWho").value = $("personBirthday").value = "";
+  saveBoard("Added " + name);
+};
+
+$("addNote").onclick = () => {
+  const text = $("noteText").value.trim();
+  if (!text) { toast("Type a note first"); return; }
+  const repeat = $("noteRepeat").value;
+  state.board.notes.push({ text, repeat, day: repeat === "once" ? 1 : parseInt($("noteDay").value, 10) });
+  $("noteText").value = "";
+  saveBoard("Note added");
+};
+
+try { $("photoFrom").value = localStorage.getItem("photoFrom") || ""; } catch (e) { /* private mode */ }
+$("photoFrom").addEventListener("change", () => {
+  try { localStorage.setItem("photoFrom", $("photoFrom").value.trim()); } catch (e) { /* private mode */ }
+});
+
 function renderAuto() {
   const a = state.auto;
   const box = $("auto");
@@ -433,7 +554,11 @@ async function upload(e, endpoint) {
     const f = files[i];
     toast("Uploading " + (i + 1) + " of " + files.length + "…");
     try {
-      state = await api("POST", endpoint + "?name=" + encodeURIComponent(f.name), f, f.type || "application/octet-stream");
+      let url = endpoint + "?name=" + encodeURIComponent(f.name);
+      if (endpoint === "/api/photo") {
+        url += "&from=" + encodeURIComponent($("photoFrom").value.trim()) + "&taken=" + (f.lastModified || 0);
+      }
+      state = await api("POST", url, f, f.type || "application/octet-stream");
     } catch (err) {
       toast("Couldn't upload " + f.name);
       return;

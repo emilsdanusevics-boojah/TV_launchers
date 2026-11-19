@@ -13,7 +13,9 @@ import java.util.Locale;
  * back or ambient mode starts, never while someone is using it.
  *
  * Choosing a launcher by hand (from a menu or the phone) wins until the next change of period,
- * e.g. pick Photos in the evening and it stays until tomorrow morning.
+ * e.g. pick Photos in the evening and it stays until tomorrow morning. Choose the same one in
+ * the same part of the day twice (on different days) and Autopilot learns it: from then on
+ * that's the launcher for that part of the day.
  */
 final class Autopilot {
 
@@ -81,9 +83,38 @@ final class Autopilot {
         return id;
     }
 
-    /** A launcher was chosen by hand: leave it alone until the next period. */
-    static void choseByHand(Context context) {
-        StringBuilder ignored = new StringBuilder();
-        prefs(context).edit().putString("autopilot_manual", period(context, new Date(), ignored)).apply();
+    /**
+     * A launcher was chosen by hand: leave it alone until the next period. Returns a message
+     * if this taught Autopilot a new launcher for this part of the day, otherwise null.
+     */
+    static String choseByHand(Context context, String id) {
+        StringBuilder want = new StringBuilder();
+        String period = period(context, new Date(), want);
+        SharedPreferences p = prefs(context);
+        SharedPreferences.Editor e = p.edit().putString("autopilot_manual", period);
+        String learned = null;
+        if (enabled(context) && !id.equals(want.toString())) {
+            String date = period.substring(0, period.indexOf(' '));
+            String slot = period.substring(period.indexOf(' ') + 1);   // day, evening or holiday
+            String last = p.getString("autopilot_learn_" + slot, "");
+            if (last.endsWith("|" + id) && !last.startsWith(date + "|")) {
+                e.putString("autopilot_" + slot, id).remove("autopilot_learn_" + slot);
+                learned = "Autopilot will use " + name(id) + (slot.equals("holiday") ? " on red days"
+                        : slot.equals("evening") ? " after sunset" : " by day") + " from now on";
+            } else {
+                e.putString("autopilot_learn_" + slot, date + "|" + id);
+            }
+        }
+        e.apply();
+        return learned;
+    }
+
+    private static String name(String id) {
+        for (int i = 0; i < MainActivity.LAUNCHER_IDS.length; i++) {
+            if (MainActivity.LAUNCHER_IDS[i].equals(id)) {
+                return MainActivity.LAUNCHER_NAMES[i];
+            }
+        }
+        return id;
     }
 }
