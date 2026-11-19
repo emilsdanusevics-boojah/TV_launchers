@@ -45,6 +45,8 @@ class FireplaceTheme implements LauncherTheme {
     private ImageView still;
     private TextView time;
     private TextView date;
+    private LinearLayout clock;
+    private AmbientClock ambientClock;
     private LinearLayout strip;
     private LinearLayout appRow;
     private ImageView gear;
@@ -101,7 +103,7 @@ class FireplaceTheme implements LauncherTheme {
         root.addView(still, new FrameLayout.LayoutParams(-1, -1));
 
         // The clock, dim in the corner.
-        LinearLayout clock = new LinearLayout(activity);
+        clock = new LinearLayout(activity);
         clock.setOrientation(LinearLayout.VERTICAL);
         clock.setAlpha(0.55f);
         time = PanelMenu.text(activity, light, 64, FG);
@@ -174,7 +176,22 @@ class FireplaceTheme implements LauncherTheme {
         FrameLayout.LayoutParams menuParams = new FrameLayout.LayoutParams(dp(300), -2, Gravity.BOTTOM | Gravity.END);
         menuParams.setMargins(0, dp(24), dp(44), dp(100));
         root.addView(menu.view, menuParams);
+
+        ambientClock = new AmbientClock(activity);
+        root.addView(ambientClock, ambientClock.layout());
         return root;
+    }
+
+    @Override
+    public void setAmbient(boolean ambient) {
+        // Just the fire; the clock moves to the small one in the other corner.
+        if (ambient) {
+            menu.close();
+            hideStripNow();
+        }
+        clock.animate().cancel();
+        clock.animate().alpha(ambient ? 0f : 0.55f).setDuration(ambient ? 800 : 300).start();
+        ambientClock.show(ambient);
     }
 
     @Override
@@ -210,6 +227,7 @@ class FireplaceTheme implements LauncherTheme {
         Date now = new Date();
         time.setText(DateFormat.format(DateFormat.is24HourFormat(activity) ? "HH:mm" : "h:mm", now));
         date.setText(DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEdMMMM"), now));
+        ambientClock.tick();
     }
 
     @Override

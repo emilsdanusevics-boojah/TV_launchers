@@ -7,10 +7,12 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 
 import java.util.List;
@@ -23,6 +25,10 @@ import java.util.List;
  * shown over it, and it goes away again once the music stops. Back hides the record until
  * the music next starts.
  *
+ * After a few minutes without the remote (set on the phone page), the launcher on screen
+ * goes into ambient mode: just its picture and a dim clock. Any button brings it back; that
+ * press does nothing else.
+ *
  * It also runs the phone page (see RemoteServer) and picks up changes made there or in
  * EditAppsActivity.
  */
@@ -33,6 +39,9 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     static final String DEFAULT_LAUNCHER = "photos";
 
     private static final long PAUSED_COUNTS_AS_STOPPED_MS = 30000;
+    static final int DEFAULT_AMBIENT_MINUTES = 5;
+    // Ambient mode keeps the screen on for this long; then the TV's own sleep takes over.
+    private static final long AMBIENT_KEEPS_SCREEN_ON_MS = 2 * 60 * 60 * 1000;
     private static final long FADE_MS = 450;
 
     private SharedPreferences settings;
@@ -49,6 +58,46 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     private boolean showingVinyl;
     private boolean dismissed;       // Back pressed on the record; stays hidden until music next starts
     private boolean resumed;
+    private boolean ambient;
+    private int swallowKeyUp = -1;   // the key that woke ambient mode; its release is ignored too
+    private long lastPressAt;
+
+    private final Runnable goAmbient = new Runnable() {
+        @Override
+        public void run() {
+            if (!resumed || ambient) {
+                return;
+            }
+            // The wait may have been changed on the phone meanwhile.
+            int minutes = ambientMinutes(MainActivity.this);
+            if (minutes <= 0) {
+                handler.postDelayed(this, 60000);   // off; look again in case it is turned on
+                return;
+            }
+            long left = lastPressAt + minutes * 60000L - System.currentTimeMillis();
+            if (left > 1000) {
+                handler.postDelayed(this, left);
+                return;
+            }
+            // Music playing (e.g. Spotify Connect): not idle. Look again in a minute.
+            AudioManager audio = (AudioManager) getSystemService(AUDIO_SERVICE);
+            if (audio != null && audio.isMusicActive()) {
+                handler.postDelayed(this, 60000);
+                return;
+            }
+            ambient = true;
+            active().setAmbient(true);
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            handler.postDelayed(releaseScreen, AMBIENT_KEEPS_SCREEN_ON_MS);
+        }
+    };
+
+    private final Runnable releaseScreen = new Runnable() {
+        @Override
+        public void run() {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
+    };
 
     private final Runnable musicStopped = new Runnable() {
         @Override
@@ -199,6 +248,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         if (vinyl == null || show == showingVinyl) {
             return;
         }
+        leaveAmbient();
         if (resumed) {
             active().onPause();
         }
@@ -254,6 +304,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             active().onTimeChanged();
             active().onResume();
         }
+        restartIdleTimer();
     }
 
     @Override
@@ -264,6 +315,8 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             music.stop();
         }
         handler.removeCallbacks(musicStopped);
+        handler.removeCallbacks(goAmbient);
+        leaveAmbient();
         active().onPause();
         super.onPause();
     }
@@ -300,5 +353,49 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         return active().onKeyDown(keyCode, event) || super.onKeyDown(keyCode, event);
+    }
+
+    // ---- Ambient mode ----
+
+    // Every press restarts the wait; the first press in ambient mode only wakes the launcher.
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_UP && event.getKeyCode() == swallowKeyUp) {
+            swallowKeyUp = -1;
+            return true;
+        }
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            if (ambient) {
+                swallowKeyUp = event.getKeyCode();
+                leaveAmbient();
+                restartIdleTimer();
+                return true;
+            }
+            restartIdleTimer();
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    /** Minutes without the remote before ambient mode; 0 = never. */
+    static int ambientMinutes(Context context) {
+        return context.getSharedPreferences("launcher", MODE_PRIVATE).getInt("ambient_minutes", DEFAULT_AMBIENT_MINUTES);
+    }
+
+    private void restartIdleTimer() {
+        handler.removeCallbacks(goAmbient);
+        lastPressAt = System.currentTimeMillis();
+        if (resumed) {
+            // First look after a minute, so a wait changed on the phone applies soon.
+            handler.postDelayed(goAmbient, 60000L);
+        }
+    }
+
+    private void leaveAmbient() {
+        handler.removeCallbacks(releaseScreen);
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (ambient) {
+            ambient = false;
+            active().setAmbient(false);
+        }
     }
 }

@@ -86,6 +86,12 @@
   </section>
 
   <section>
+    <h2>Ambient mode</h2>
+    <div class="seg" id="ambient"></div>
+    <p class="hint">After this long without the remote, the launcher puts its buttons away and shows only its picture and a small clock (on Monkey Island, a pirate takes a walk). Any button brings it back.</p>
+  </section>
+
+  <section>
     <h2>Apps</h2>
     <ul id="apps"></ul>
     <div class="add">
@@ -163,6 +169,23 @@ function render() {
       toast(l.name + " is on the TV");
     };
     seg.appendChild(b);
+  }
+
+  // Ambient mode
+  const amb = $("ambient");
+  amb.innerHTML = "";
+  for (const m of [0, 2, 5, 10, 15]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = m === 0 ? "Off" : m + " min";
+    b.className = m === state.ambientMinutes ? "on" : "";
+    b.setAttribute("aria-pressed", String(m === state.ambientMinutes));
+    b.onclick = async () => {
+      state = await api("POST", "/api/ambient", { minutes: m });
+      render();
+      toast(m === 0 ? "Ambient mode is off" : "Ambient mode after " + m + " minutes");
+    };
+    amb.appendChild(b);
   }
 
   // Apps

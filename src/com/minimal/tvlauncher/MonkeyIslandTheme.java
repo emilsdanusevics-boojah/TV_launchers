@@ -11,6 +11,7 @@ import android.provider.Settings;
 import android.text.format.DateFormat;
 import android.view.KeyEvent;
 import android.view.View;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 
 import java.io.File;
@@ -49,6 +50,7 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
     private final MainActivity activity;
     private final Handler handler = new Handler();
     private ScummView scumm;
+    private PirateView pirate;
     private ImageView background;
     private ImageView backgroundTop;
     private String backgroundKey;
@@ -121,6 +123,10 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
         verbs.add(new ScummView.Verb(SETTINGS, "Settings", "TV settings or another launcher", false));
         scumm.setVerbs(verbs);
         scumm.setListener(this);
+
+        // Ambient mode: the pirate's walk, over everything.
+        pirate = new PirateView(activity);
+        ((FrameLayout) root).addView(pirate, new FrameLayout.LayoutParams(-1, -1));
         return root;
     }
 
@@ -139,6 +145,20 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
         String time = DateFormat.is24HourFormat(activity) ? "HH:mm" : "h:mm";
         String day = DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEdMMMM");
         scumm.setTime(DateFormat.format(time, now).toString(), DateFormat.format(day, now).toString());
+        pirate.setTime(DateFormat.format(time, now).toString());
+    }
+
+    @Override
+    public void setAmbient(boolean ambient) {
+        // The verbs and apps make way for a pirate taking a walk along the coast.
+        if (ambient) {
+            scumm.reset();
+            pirate.setLines(holidayLines());
+            pirate.start();
+        } else {
+            pirate.stop();
+        }
+        AmbientClock.fade(ambient, scumm);
     }
 
     @Override
@@ -153,6 +173,7 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
     @Override
     public void onPause() {
         handler.removeCallbacks(rotateBackground);
+        pirate.stop();
         handler.removeCallbacks(speak);
         handler.removeCallbacks(hush);
     }

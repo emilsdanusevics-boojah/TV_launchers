@@ -24,6 +24,12 @@ interface LauncherTheme {
 
     boolean onKeyDown(int keyCode, KeyEvent event);
 
+    /**
+     * Ambient mode: after a while without the remote, the launcher puts its buttons and text
+     * away and shows only its picture (and a small, dim clock). Any button brings it back.
+     */
+    void setAmbient(boolean ambient);
+
     /** Returns true if Back was used (e.g. to close a menu). */
     boolean onBack();
 

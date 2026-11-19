@@ -53,6 +53,7 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
     private LinearLayout menuItems;
     private TextView menuFooter;
     private Apps.Entry spotify;
+    private AmbientClock ambientClock;
 
     VinylTheme(MainActivity activity) {
         this.activity = activity;
@@ -147,9 +148,22 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
         menuParams.setMargins(0, 0, dp(44), dp(44));
         root.addView(menu, menuParams);
 
+        ambientClock = new AmbientClock(activity);
+        root.addView(ambientClock, ambientClock.layout());
+
         nowPlaying = new NowPlaying(activity, this);
         showIdle(NowPlaying.NOTHING);
         return root;
+    }
+
+    @Override
+    public void setAmbient(boolean ambient) {
+        // Just the record, turning slowly.
+        if (ambient) {
+            closeMenu();
+        }
+        AmbientClock.fade(ambient, idle);
+        ambientClock.show(ambient);
     }
 
     @Override
@@ -164,6 +178,7 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
 
     @Override
     public void onTimeChanged() {
+        ambientClock.tick();
     }
 
     @Override

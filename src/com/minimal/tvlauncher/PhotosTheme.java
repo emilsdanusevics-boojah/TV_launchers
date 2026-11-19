@@ -78,6 +78,10 @@ class PhotosTheme implements LauncherTheme {
     private ImageView gear;
     private LinearLayout bottom;
     private PanelMenu menu;
+    private View cornerShade;
+    private View bottomShade;
+    private LinearLayout corner;
+    private AmbientClock ambientClock;
     private List<Apps.Entry> apps;
     private int accent = ACCENT;
     private int ink = ACCENT_INK;
@@ -137,13 +141,13 @@ class PhotosTheme implements LauncherTheme {
         root.addView(front, new FrameLayout.LayoutParams(-1, -1));
 
         // Shades so the text and tiles read on any photo.
-        root.addView(PanelMenu.cornerShade(activity, 0xB0000000, 560),
-                new FrameLayout.LayoutParams(dp(560), dp(560), Gravity.TOP | Gravity.START));
-        root.addView(shade(GradientDrawable.Orientation.BOTTOM_TOP, 0xC0000000),
-                new FrameLayout.LayoutParams(-1, dp(240), Gravity.BOTTOM));
+        cornerShade = PanelMenu.cornerShade(activity, 0xB0000000, 560);
+        root.addView(cornerShade, new FrameLayout.LayoutParams(dp(560), dp(560), Gravity.TOP | Gravity.START));
+        bottomShade = shade(GradientDrawable.Orientation.BOTTOM_TOP, 0xC0000000);
+        root.addView(bottomShade, new FrameLayout.LayoutParams(-1, dp(240), Gravity.BOTTOM));
 
         // Clock, date, name days, weather, holiday greeting.
-        LinearLayout corner = new LinearLayout(activity);
+        corner = new LinearLayout(activity);
         corner.setOrientation(LinearLayout.VERTICAL);
         time = PanelMenu.text(activity, light, 96, FG);
         time.setIncludeFontPadding(false);
@@ -222,8 +226,21 @@ class PhotosTheme implements LauncherTheme {
         root.addView(menu.view, menuParams);
         paintAccent();
 
+        ambientClock = new AmbientClock(activity);
+        root.addView(ambientClock, ambientClock.layout());
+
         loadPhotoList();
         return root;
+    }
+
+    @Override
+    public void setAmbient(boolean ambient) {
+        // Only the photos, drifting and changing as before.
+        if (ambient) {
+            menu.close();
+        }
+        AmbientClock.fade(ambient, cornerShade, bottomShade, corner, credit, bottom);
+        ambientClock.show(ambient);
     }
 
     private LinearLayout.LayoutParams under(int top) {
@@ -347,6 +364,7 @@ class PhotosTheme implements LauncherTheme {
         names.setText(today == null ? "" : "Vārda dienas · " + today);
         names.setVisibility(today == null ? View.GONE : View.VISIBLE);
         showHoliday();
+        ambientClock.tick();
     }
 
     @Override

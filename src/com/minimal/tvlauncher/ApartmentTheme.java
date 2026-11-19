@@ -59,6 +59,9 @@ class ApartmentTheme implements LauncherTheme {
     private LinearLayout appRow;
     private ImageView gear;
     private PanelMenu menu;
+    private View shade;
+    private LinearLayout clock;
+    private AmbientClock ambientClock;
 
     private final Runnable weatherTimer = new Runnable() {
         @Override
@@ -93,11 +96,11 @@ class ApartmentTheme implements LauncherTheme {
         root.addView(orbit, new FrameLayout.LayoutParams(-1, -1));
 
         // A soft shade behind the clock, from the top-left corner.
-        root.addView(PanelMenu.cornerShade(activity, 0xE01D1E20, 580),   // dark enough for the brighter desk view
-                new FrameLayout.LayoutParams(dp(580), dp(580), Gravity.TOP | Gravity.START));
+        shade = PanelMenu.cornerShade(activity, 0xE01D1E20, 580);   // dark enough for the brighter desk view
+        root.addView(shade, new FrameLayout.LayoutParams(dp(580), dp(580), Gravity.TOP | Gravity.START));
 
         // Clock, date, weather and any holiday greeting, in one block.
-        LinearLayout clock = new LinearLayout(activity);
+        clock = new LinearLayout(activity);
         clock.setOrientation(LinearLayout.VERTICAL);
         time = PanelMenu.text(activity, light, 88, FG);
         time.setIncludeFontPadding(false);
@@ -165,6 +168,8 @@ class ApartmentTheme implements LauncherTheme {
         root.addView(menu.view, menuParams);
         paintAccent();
 
+        ambientClock = new AmbientClock(activity);
+        root.addView(ambientClock, ambientClock.layout());
         return root;
     }
 
@@ -209,12 +214,23 @@ class ApartmentTheme implements LauncherTheme {
     }
 
     @Override
+    public void setAmbient(boolean ambient) {
+        // Just the room and the sky outside.
+        if (ambient) {
+            menu.close();
+        }
+        AmbientClock.fade(ambient, shade, clock, bar);
+        ambientClock.show(ambient);
+    }
+
+    @Override
     public void onTimeChanged() {
         Date now = new Date();
         String fmt = DateFormat.is24HourFormat(activity) ? "HH:mm" : "h:mm";
         time.setText(DateFormat.format(fmt, now));
         date.setText(DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEdMMMM"), now));
         showHoliday();   // a new day may be a red day
+        ambientClock.tick();
     }
 
     @Override

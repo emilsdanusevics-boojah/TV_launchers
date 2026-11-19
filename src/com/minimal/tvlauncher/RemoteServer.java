@@ -36,6 +36,7 @@ import java.util.concurrent.Executors;
  *   GET    /api/state                launchers, apps, installed apps, backgrounds, photos
  *   POST   /api/launcher             {"id": "..."}
  *   POST   /api/apps                 [{"pkg": "...", "name": "..."}, ...]
+ *   POST   /api/ambient              {"minutes": n}   minutes without the remote before ambient mode; 0 = off
  *   GET    /api/background?name=x    one background image
  *   POST   /api/background?name=x    upload (the request body is the image)
  *   DELETE /api/background?name=x
@@ -276,6 +277,14 @@ class RemoteServer extends Thread {
             }
             Remote.setLauncher(context, id);
             sendJson(out, state());
+        } else if (key.equals("POST /api/ambient")) {
+            int minutes = new JSONObject(new String(req.body, "UTF-8")).getInt("minutes");
+            if (minutes < 0 || minutes > 120) {
+                send(out, 400, "text/plain", "Minutes must be 0 to 120".getBytes("UTF-8"));
+                return;
+            }
+            context.getSharedPreferences("launcher", Context.MODE_PRIVATE).edit().putInt("ambient_minutes", minutes).apply();
+            sendJson(out, state());
         } else if (key.equals("POST /api/apps")) {
             JSONArray array = new JSONArray(new String(req.body, "UTF-8"));
             List<AppList.Item> items = new ArrayList<AppList.Item>();
@@ -345,6 +354,7 @@ class RemoteServer extends Thread {
         state.put("version", version());
         SharedPreferences prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE);
         state.put("launcher", prefs.getString("launcher", MainActivity.DEFAULT_LAUNCHER));
+        state.put("ambientMinutes", MainActivity.ambientMinutes(context));
         JSONArray launchers = new JSONArray();
         for (int i = 0; i < MainActivity.LAUNCHER_IDS.length; i++) {
             launchers.put(new JSONObject().put("id", MainActivity.LAUNCHER_IDS[i]).put("name", MainActivity.LAUNCHER_NAMES[i]));

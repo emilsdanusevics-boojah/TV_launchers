@@ -75,6 +75,18 @@ The launcher also gives the TV a screensaver called **Apartment**: the room loop
 adb shell settings put secure screensaver_components com.minimal.tvlauncher/.ApartmentDream
 ```
 
+## Ambient mode
+
+After a few minutes without the remote (5 by default; set it to off, 2, 5, 10 or 15 minutes on the phone page), whichever launcher is on screen puts its buttons and text away and shows only its picture, with a small, dim clock that moves a little every minute:
+
+- **Photos:** the slideshow carries on.
+- **Apartment:** the room, with the live sky in the windows.
+- **Fireplace:** the fire (and its sound, if it's on).
+- **Vinyl:** the turntable.
+- **Monkey Island:** a pirate (an original character, drawn by `make_pirate.py`) strolls through four full-screen scenes along a coast: the harbour at dusk, a jungle path, a beach and the town at night (drawn by `make_scenes.py`). He walks off one side of the screen into the next place, now and then stops to look around, and sometimes says something. On red days he talks about the holiday.
+
+Any button brings the launcher back; that first press does nothing else. Ambient mode doesn't start while music is playing. It keeps the screen on for up to two hours, then the TV's own sleep timer takes over.
+
 ## Live weather
 
 The current conditions and today's sunrise and sunset for Brīvības iela 95 come from [Open-Meteo](https://open-meteo.com/). It's free and needs no account or key. The launcher fetches them when it appears and every 15 minutes while it's on screen. Without internet, the sky keeps its last conditions and the weather line is hidden.
@@ -148,6 +160,7 @@ All the launchers use the same list. In Monkey Island there are 6 apps per inven
 While the launcher is running, it serves a small page on your home Wi-Fi at **http://&lt;TV's IP address&gt;:8765**. Every settings menu shows the address. On the page you can:
 
 - switch launcher
+- set how long until ambient mode starts, or turn it off
 - show, hide, reorder and rename apps
 - upload and delete photos for the Photos launcher
 - upload and delete Monkey Island background images
@@ -232,6 +245,8 @@ The APK is built without Gradle, using the Debian/Ubuntu Android tools:
 sudo apt install aapt dalvik-exchange apksigner zipalign android-sdk-platform-23 openjdk-17-jdk python3-pil
 python3 make_icons.py res/drawable-xhdpi   # only needed if you change the icons
 python3 make_background.py res/drawable-nodpi/bg_default.png   # built-in background art
+python3 make_pirate.py res/drawable-nodpi/pirate.png   # ambient-mode pirate
+python3 make_scenes.py res/drawable-nodpi              # ambient-mode scenes
 python3 make_verb_font.py src/com/minimal/tvlauncher/VerbFont.java   # verb font
 web/build.sh                               # 3D apartment -> assets/apartment/room_*.mp4 (needs Node.js, ffmpeg)
 ./build.sh                                 # -> MinimalTVLauncher.apk
