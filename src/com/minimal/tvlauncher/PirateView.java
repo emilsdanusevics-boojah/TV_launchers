@@ -23,10 +23,14 @@ import java.util.Random;
  * the picture, unless its name gives the row, e.g. dock_g130.png. He walks off one side of the screen into the next place, now and then
  * stops to look around, and sometimes says something (on red days, about the holiday).
  *
- * A walk sprite sheet uploaded on the phone page replaces the built-in pirate: one row of
- * equal frames facing right, saved as files/pirate/walk_N.png where N is the number of frames
- * (all of them walking; the first is also used for standing). A solid background colour
- * (whatever the top-left pixel is) is made transparent.
+ * A walk cycle uploaded on the phone page replaces the built-in pirate, in one of two forms:
+ *   - one row of equal frames facing right, saved as files/pirate/walk_N.png where N is the
+ *     number of frames (all walking; the first is also used for standing);
+ *   - separate frames for each direction, from a ZIP, saved as files/pirate/f_right_01.png,
+ *     f_left_.., f_front_.., f_back_..: he walks with the side frames (flipping one side if
+ *     only the other is there), stands and talks facing you (the first front frame), and
+ *     looks into the scene now and then (the first back frame).
+ * A solid background colour (whatever the top-left pixel is) is made transparent.
  *
  * Like the rest of the launcher it is drawn on the 320-wide pixel grid and scaled up without
  * smoothing. It only redraws a few times a second, which is all a walk cycle needs.
@@ -42,6 +46,8 @@ final class PirateView extends View {
     private static final Pattern GROUND_IN_NAME = Pattern.compile(".*_g(\\d{1,4})\\.[A-Za-z]+");
     static final String CUSTOM_DIR = "pirate";
     static final Pattern CUSTOM_NAME = Pattern.compile("walk_(\\d{1,2})\\.(png|gif|webp)");
+    static final Pattern FRAME_NAME = Pattern.compile("f_(right|left|front|back)_(\\d{2})\\.(png|gif|webp)");
+    private static final int SIDE = 0, FRONT = 1, BACK = 2;
     private static final int MAX_HEIGHT = 90;     // taller sprites are shrunk by a whole factor
     private static final long TICK_MS = 125;      // eight animation frames a second
     private static final int STEP = 3;            // grid pixels per walk frame
@@ -83,6 +89,9 @@ final class PirateView extends View {
     private int standFrame = 6;
     private int blinkFrame = 7;
     private int shrink = 1;
+    // Separate frames by direction (from a ZIP), or null for a single sheet.
+    private java.util.List<Bitmap> right, left, front, back;
+    private int pose = SIDE;
     private Bitmap grid;
     private Canvas gridCanvas;
 
@@ -240,7 +249,12 @@ final class PirateView extends View {
         if (idleTicks > 0) {
             idleTicks--;
             frame = random.nextInt(14) == 0 ? blinkFrame : standFrame;
-            if (glance && (idleTicks == idleLength * 2 / 3 || idleTicks == idleLength / 3)) {
+            if (right != null) {
+                // Facing you while he stands; during a glance, looking into the scene.
+                boolean looking = glance && idleTicks < idleLength * 2 / 3 && idleTicks > idleLength / 3 && speech == null;
+                pose = looking && !back.isEmpty() ? BACK : (front.isEmpty() ? SIDE : FRONT);
+                frame = 0;
+            } else if (glance && (idleTicks == idleLength * 2 / 3 || idleTicks == idleLength / 3)) {
                 dir = -dir;
             }
             if (idleTicks == 0 && turnBack) {
@@ -249,6 +263,7 @@ final class PirateView extends View {
             return;
         }
 
+        pose = SIDE;
         frame = (frame + 1) % walkFrames;
         int before = x;
         x += dir * STEP;
@@ -377,7 +392,79 @@ final class PirateView extends View {
         return null;
     }
 
+    /** The uploaded per-direction frames, in order, or an empty list. */
+    static java.util.List<File> customFrames(Context context) {
+        java.util.List<File> out = new java.util.ArrayList<File>();
+        File root = context.getExternalFilesDir(null);
+        File[] files = root == null ? null : new File(root, CUSTOM_DIR).listFiles();
+        if (files != null) {
+            java.util.Arrays.sort(files);
+            for (File f : files) {
+                if (f.isFile() && FRAME_NAME.matcher(f.getName()).matches()) {
+                    out.add(f);
+                }
+            }
+        }
+        return out;
+    }
+
+    // Loads the per-direction frames, if there are any usable ones. Returns true if so.
+    private boolean loadFrames() {
+        java.util.List<File> files = customFrames(getContext());
+        if (files.isEmpty()) {
+            return false;
+        }
+        java.util.List<Bitmap> r = new java.util.ArrayList<Bitmap>(), l = new java.util.ArrayList<Bitmap>(),
+                f = new java.util.ArrayList<Bitmap>(), b = new java.util.ArrayList<Bitmap>();
+        int maxW = 1, maxH = 1;
+        for (File file : files) {
+            Matcher m = FRAME_NAME.matcher(file.getName());
+            if (!m.matches()) {
+                continue;
+            }
+            Bitmap bmp;
+            try {
+                BitmapFactory.Options bounds = new BitmapFactory.Options();
+                bounds.inJustDecodeBounds = true;
+                BitmapFactory.decodeFile(file.getPath(), bounds);
+                if (bounds.outWidth <= 0 || (long) bounds.outWidth * bounds.outHeight > 1024L * 1024) {
+                    continue;   // not an image, or far too big for a sprite
+                }
+                bmp = BitmapFactory.decodeFile(file.getPath());
+            } catch (OutOfMemoryError e) {
+                continue;
+            }
+            if (bmp == null) {
+                continue;
+            }
+            bmp = clearBackground(bmp);
+            maxW = Math.max(maxW, bmp.getWidth());
+            maxH = Math.max(maxH, bmp.getHeight());
+            String dirName = m.group(1);
+            (dirName.equals("right") ? r : dirName.equals("left") ? l : dirName.equals("front") ? f : b).add(bmp);
+        }
+        if (r.isEmpty() && l.isEmpty()) {
+            return false;   // nothing to walk with
+        }
+        right = r;
+        left = l;
+        front = f;
+        back = b;
+        sheet = r.isEmpty() ? l.get(0) : r.get(0);   // anything non-null: the frames draw themselves
+        frameW = maxW;
+        frameH = maxH;
+        walkFrames = Math.max(r.size(), l.size());
+        standFrame = 0;
+        blinkFrame = 0;
+        shrink = (frameH + MAX_HEIGHT - 1) / MAX_HEIGHT;
+        return true;
+    }
+
     private void loadSheet() {
+        right = left = front = back = null;
+        if (loadFrames()) {
+            return;
+        }
         File custom = customSheet(getContext());
         if (custom != null) {
             Matcher m = CUSTOM_NAME.matcher(custom.getName());
@@ -466,9 +553,15 @@ final class PirateView extends View {
 
         // The pirate, flipped when walking left.
         int feet = Math.min(gh - 1, top + Math.round(sceneGround * scale));
-        src.set(frame * frameW, 0, (frame + 1) * frameW, frameH);
-        dst.set(x, feet - drawH() + 1, x + drawW(), feet + 1);
-        if (dir < 0) {
+        if (right != null) {
+            drawFrame(c, feet);
+        } else {
+            src.set(frame * frameW, 0, (frame + 1) * frameW, frameH);
+            dst.set(x, feet - drawH() + 1, x + drawW(), feet + 1);
+        }
+        if (right != null) {
+            // drawn above
+        } else if (dir < 0) {
             c.save();
             c.scale(-1, 1, x + drawW() / 2f, 0);
             c.drawBitmap(sheet, src, dst, blitPaint);
@@ -499,6 +592,37 @@ final class PirateView extends View {
         int screenTop = (getHeight() - gh * unit) / 2;
         dst.set(left, screenTop, left + gw * unit, screenTop + gh * unit);
         canvas.drawBitmap(grid, null, dst, blitPaint);
+    }
+
+    // One of the per-direction frames, its feet on the ground, centred in his place.
+    private void drawFrame(Canvas c, int feet) {
+        Bitmap b;
+        boolean flip = false;
+        if (pose == FRONT && !front.isEmpty()) {
+            b = front.get(0);
+        } else if (pose == BACK && !back.isEmpty()) {
+            b = back.get(0);
+        } else {
+            java.util.List<Bitmap> want = dir > 0 ? right : left;
+            java.util.List<Bitmap> other = dir > 0 ? left : right;
+            if (want.isEmpty()) {
+                want = other;
+                flip = true;
+            }
+            b = want.get(frame % want.size());
+        }
+        int w = b.getWidth() / shrink, h = b.getHeight() / shrink;
+        int left0 = x + (drawW() - w) / 2;
+        src.set(0, 0, b.getWidth(), b.getHeight());
+        dst.set(left0, feet - h + 1, left0 + w, feet + 1);
+        if (flip) {
+            c.save();
+            c.scale(-1, 1, left0 + w / 2f, 0);
+            c.drawBitmap(b, src, dst, blitPaint);
+            c.restore();
+        } else {
+            c.drawBitmap(b, src, dst, blitPaint);
+        }
     }
 
     // Wrapped lines above his head, centred on him but kept on screen.

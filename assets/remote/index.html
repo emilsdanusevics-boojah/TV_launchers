@@ -198,9 +198,9 @@
     <div class="row">
       <label for="frames">Frames</label>
       <input type="number" id="frames" min="1" max="99" value="6" inputmode="numeric" style="width: 5em">
-      <label class="upload"><input type="file" id="pirateFile" accept="image/png,image/gif,image/webp"><span>Upload sprite sheet</span></label>
+      <label class="upload"><input type="file" id="pirateFile" accept="image/png,image/gif,image/webp,.zip,application/zip"><span>Upload sprite sheet or ZIP</span></label>
     </div>
-    <p class="hint">Replaces the built-in pirate in ambient mode. One row of equal walking frames, facing right, at the game's own pixel size (about 30–80 px tall; bigger sheets are shrunk). A flat background colour is made transparent. Takes effect the next time ambient mode starts.</p>
+    <p class="hint">Replaces the built-in pirate in ambient mode, at its own pixel size (about 30–80 px tall; bigger is shrunk). A flat background colour is made transparent. Takes effect the next time ambient mode starts.<br><b>A sheet:</b> one row of equal walking frames facing right, plus the number of frames.<br><b>A ZIP of separate frames</b> (the frame count is ignored): name each by direction and number, e.g. <code>walk_right_1.png</code>…, <code>walk_left_1.png</code>…, and optionally <code>walk_front_1.png</code> (he faces you when he stops and talks) and <code>walk_back_1.png</code> (he looks into the scene). Left or right alone is enough; the other side is mirrored.</p>
   </section>
 
   <section>
@@ -431,12 +431,13 @@ $("pirateFile").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
-  const frames = parseInt($("frames").value, 10);
+  const isZip = /\.zip$/i.test(file.name);
+  const frames = isZip ? 1 : parseInt($("frames").value, 10);
   if (!(frames >= 1 && frames <= 99)) { toast("Frames must be 1 to 99"); return; }
   try {
-    state = await api("POST", "/api/pirate?frames=" + frames + "&name=" + encodeURIComponent(file.name), file, file.type || "image/png");
+    state = await api("POST", "/api/pirate?frames=" + frames + "&name=" + encodeURIComponent(file.name), file, isZip ? "application/zip" : (file.type || "image/png"));
     render();
-    toast("Sprite sheet uploaded");
+    toast(isZip ? "Walk frames uploaded" : "Sprite sheet uploaded");
   } catch (err) {
     toast("Couldn't upload: " + err.message);
   }

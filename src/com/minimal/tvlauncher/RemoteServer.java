@@ -520,7 +520,12 @@ class RemoteServer extends Thread {
         state.put("backgrounds", imageList(backgroundsDir()));
         state.put("photos", imageList(photosDir()));
         File sheet = PirateView.customSheet(context);
-        state.put("pirate", sheet == null ? JSONObject.NULL : sheet.getName() + ":" + sheet.lastModified());
+        List<File> frameSet = PirateView.customFrames(context);
+        if (sheet == null && !frameSet.isEmpty()) {
+            state.put("pirate", "frames:" + frameSet.size() + ":" + frameSet.get(0).lastModified());
+        } else {
+            state.put("pirate", sheet == null ? JSONObject.NULL : sheet.getName() + ":" + sheet.lastModified());
+        }
         return state;
     }
 
@@ -559,6 +564,9 @@ class RemoteServer extends Thread {
         }
         File dir = new File(root, PirateView.CUSTOM_DIR);
         File current = PirateView.customSheet(context);
+        if (current == null && !PirateView.customFrames(context).isEmpty()) {
+            current = PirateView.customFrames(context).get(0);   // a frame set: show its first frame
+        }
         if (req.method.equals("GET")) {
             if (current == null) {
                 send(out, 404, "text/plain", "Not found".getBytes("UTF-8"));
@@ -566,6 +574,16 @@ class RemoteServer extends Thread {
             }
             String n = current.getName();
             send(out, 200, "image/" + n.substring(n.lastIndexOf('.') + 1), readFile(current));
+            return;
+        }
+        String rawName = req.query.get("name");
+        if (req.method.equals("POST") && rawName != null && rawName.toLowerCase(Locale.ROOT).endsWith(".zip")) {
+            String problem = unzipFrames(req.body, dir);
+            if (problem != null) {
+                send(out, 400, "text/plain", problem.getBytes("UTF-8"));
+                return;
+            }
+            sendJson(out, state());
             return;
         }
         if (req.method.equals("POST")) {
@@ -600,6 +618,78 @@ class RemoteServer extends Thread {
             return;
         }
         sendJson(out, state());
+    }
+
+    /**
+     * A ZIP of separate walk frames, one image per frame, named by direction and number, e.g.
+     * walk_right_1.png ... walk_left_1.png, walk_front_1.png, walk_back_1.png (also "side"
+     * for right, "down"/"toward" for front, "up"/"away" for back). Saved as f_right_01.png
+     * and so on. Returns a reason if it can't be used, or null.
+     */
+    private static String unzipFrames(byte[] zip, File dir) throws Exception {
+        java.util.zip.ZipInputStream in = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(zip));
+        java.util.Map<String, java.util.TreeMap<Integer, byte[]>> sets = new java.util.HashMap<String, java.util.TreeMap<Integer, byte[]>>();
+        java.util.regex.Pattern number = java.util.regex.Pattern.compile("(\\d+)(?!.*\\d)");
+        int count = 0;
+        java.util.zip.ZipEntry e;
+        try {
+            while ((e = in.getNextEntry()) != null) {
+                String name = e.getName();
+                String base = name.substring(name.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+                int dot = base.lastIndexOf('.');
+                if (e.isDirectory() || base.startsWith(".") || dot < 0 || !Arrays.asList("png", "gif", "webp").contains(base.substring(dot + 1))) {
+                    continue;
+                }
+                if (++count > 96) {
+                    return "Too many frames (up to 96)";
+                }
+                String stem = base.substring(0, dot);
+                String set = stem.contains("right") || stem.contains("side") ? "right"
+                        : stem.contains("left") ? "left"
+                        : stem.contains("front") || stem.contains("down") || stem.contains("toward") ? "front"
+                        : stem.contains("back") || stem.contains("up") || stem.contains("away") ? "back"
+                        : "right";
+                java.util.regex.Matcher m = number.matcher(stem);
+                int index = m.find() ? Math.min(999, Integer.parseInt(m.group(1).length() > 6 ? "999" : m.group(1))) : count;
+                java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                byte[] chunk = new byte[16384];
+                int n;
+                while ((n = in.read(chunk)) > 0) {
+                    buf.write(chunk, 0, n);
+                    if (buf.size() > 1024 * 1024) {
+                        return "A frame is over 1 MB: " + base;
+                    }
+                }
+                java.util.TreeMap<Integer, byte[]> frames = sets.get(set);
+                if (frames == null) {
+                    frames = new java.util.TreeMap<Integer, byte[]>();
+                    sets.put(set, frames);
+                }
+                frames.put(index, buf.toByteArray());
+            }
+        } finally {
+            in.close();
+        }
+        if (!sets.containsKey("right") && !sets.containsKey("left")) {
+            return "No walking frames found: name them with right or left, e.g. walk_right_1.png";
+        }
+        clearDir(dir);
+        dir.mkdirs();
+        for (java.util.Map.Entry<String, java.util.TreeMap<Integer, byte[]>> set : sets.entrySet()) {
+            int k = 1;
+            for (byte[] frame : set.getValue().values()) {
+                if (k > 32) {
+                    break;
+                }
+                FileOutputStream fos = new FileOutputStream(new File(dir, String.format(Locale.ROOT, "f_%s_%02d.png", set.getKey(), k++)));
+                try {
+                    fos.write(frame);
+                } finally {
+                    fos.close();
+                }
+            }
+        }
+        return null;
     }
 
     private static void clearDir(File dir) {
