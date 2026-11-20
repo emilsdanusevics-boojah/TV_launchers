@@ -377,8 +377,35 @@ class RitsTheme implements LauncherTheme {
                 b.append(change == 0 ? " · the same tomorrow" : " · " + (change > 0 ? "+" : "−") + Math.abs(change) + " min tomorrow");
             }
         }
+        String gained = sinceMidwinter(now);
+        if (gained != null) {
+            b.append(b.length() > 0 ? "\n" : "").append(gained);
+        }
         b.append(b.length() > 0 ? "\n" : "").append("Moon: ").append(moon(now));
         return b.toString();
+    }
+
+    // From midwinter to midsummer, how much more daylight Riga has than on the shortest day:
+    // a small comfort on dark mornings. Worked out from the sun's declination.
+    static String sinceMidwinter(Date now) {
+        Calendar c = Calendar.getInstance(RIGA);
+        c.setTime(now);
+        int doy = c.get(Calendar.DAY_OF_YEAR);
+        int midwinter = 355;   // about 21 December
+        int since = doy >= midwinter ? doy - midwinter : doy + (c.getActualMaximum(Calendar.DAY_OF_YEAR) - midwinter);
+        if (since < 1 || since > 182) {
+            return null;   // after midsummer the days shorten; no need to say
+        }
+        int extra = (int) Math.round((dayLength(doy) - dayLength(midwinter)) * 60);
+        return extra < 1 ? null : "+" + (extra / 60 > 0 ? extra / 60 + " h " : "") + extra % 60 + " min of light since midwinter";
+    }
+
+    // Hours of daylight in Riga on a day of the year (sunrise to sunset, with refraction).
+    private static double dayLength(int doy) {
+        double lat = Math.toRadians(56.95);
+        double decl = Math.toRadians(-23.44) * Math.cos(2 * Math.PI * (doy + 10) / 365.0);
+        double cosW = (Math.sin(Math.toRadians(-0.833)) - Math.sin(lat) * Math.sin(decl)) / (Math.cos(lat) * Math.cos(decl));
+        return 2 * Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, cosW)))) / 15.0;
     }
 
     private static int minutes(String isoLocal) {

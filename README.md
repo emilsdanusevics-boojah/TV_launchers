@@ -10,7 +10,7 @@ These run on their own, for every launcher. Each can be changed or turned off on
 - **Evening light (Day Arc)** follows the real sun over Riga. After sunset a warm, dim veil settles over the launcher, deeper after 23:00, and it lifts again at dawn. It's lighter on Fireplace and Apartment, which are evening scenes already.
 - **Bedtime** (off by default): from the chosen hour, once the TV is idle in ambient mode, the screen fades to black over ten minutes. After that the TV is allowed to go to sleep. Any button brings it back.
 - **Kitchen timers**: start one from the phone page ("Tea", 4 minutes; quick buttons for 3–30 minutes). It counts down in a small pill at the top of the screen over any launcher, keeps the screen on, and chimes softly when it's done (again every 20 seconds, three times). Any button on the remote stops the chime; that press does nothing else.
-- **Music over the fire**: when Spotify plays over the Fireplace or Window launcher, a small record turns in the bottom-right corner with the cover and the track, and the full Vinyl screen doesn't take over. You can switch back to the full screen on the phone page.
+- **Music over the fire**: when Spotify plays over the Fireplace, Window or Apartment launcher, a small record turns in the bottom-right corner with the cover and the track, and the full Vinyl screen doesn't take over. You can switch back to the full screen on the phone page.
 - **Glance card on Photos**:
   - **Mornings (05:00–11:00):** a "Today" card shows the temperature and how cold it feels, what to wear, when rain or snow starts or stops (with "take an umbrella"), and "Icy pavements likely" after wet weather turns freezing. Within the next two hours it's more exact, from the quarter-hour forecast: "Rain in about 20 min", "Dry in about 45 min".
   - **Evenings (18:00–02:00):** a "Tomorrow" card shows the 08:00 weather, the day's high, sunrise, a red day and tomorrow's name days.
@@ -22,6 +22,7 @@ These run on their own, for every launcher. Each can be changed or turned off on
 The everyday launcher: quick to open, easy to use.
 
 - A full-screen photo that slowly drifts and zooms, crossfading to the next every 45 seconds. Upload your own photos from the phone page; until you do, it shows built-in pictures of the apartment.
+- In ambient mode, the small clock carries today's first reminder or the name days underneath.
 - Portrait and square photos aren't cropped: they sit whole in the middle over a soft, blurred copy of themselves.
 - Uploaded photos aren't shown in a fixed order:
   - **New first:** a photo sent in the last week is shown before anything else, captioned "from" and the name typed on the phone page.
@@ -43,7 +44,7 @@ The name days are the traditional calendar list of the State Language Centre's c
 
 ## Apartment
 
-A cozy launcher (the first lines of the glance card show under its clock, too): slow drifts at eye level through the apartment's living room, alternating between two views: from the bed corner past the desk and the lamps towards the terrace door, and from beside the terrace door towards the desk, its lamp and the slatted wall. They dissolve into each other every 75 seconds. The windows show a live picture of the sky over Brīvības iela 95, Riga:
+A cozy launcher (the first lines of the glance card and your people's days and notes show under its clock, and music gets the small corner record): slow drifts at eye level through the apartment's living room, alternating between two views: from the bed corner past the desk and the lamps towards the terrace door, and from beside the terrace door towards the desk, its lamp and the slatted wall. They dissolve into each other every 75 seconds. The windows show a live picture of the sky over Brīvības iela 95, Riga:
 
 - **Sky colour** follows the real time of day and the cloud cover: blue by day, grey when overcast, orange and pink around the real sunrise and sunset, deep navy at night with the city's warm glow low down.
 - **The sun** glows from its real direction when it's in view, and **stars** come out on clear nights.
@@ -109,7 +110,7 @@ After a few minutes without the remote (5 by default; set it to off, 2, 5, 10 or
 - **Apartment:** the room, with the live sky in the windows.
 - **Fireplace:** the fire (and its sound, if it's on).
 - **Vinyl:** the turntable.
-- **Monkey Island:** a pirate (an original character, drawn by `make_pirate.py`) strolls through the Monkey Island backgrounds you've uploaded, in slideshow order. With none uploaded, he walks through four built-in scenes along a coast: the harbour at dusk, a jungle path, a beach and the town at night (drawn by `make_scenes.py`). In an uploaded background his feet are 90% of the way down the picture. To put them on a particular row, end the file name with `_g` and the row number in the picture's own pixels, e.g. `dock_g130.png`. He walks off one side of the screen into the next place, now and then stops to look around, and sometimes says something. On red days he talks about the holiday, and any day he mentions what's going on: today's name days, your people's days and notes, snow, rain, frost or icy pavements, and a kitchen timer that's running. The next scene loads in the background while the screen fades, so the walk doesn't hitch. You can swap in a walk cycle of your own on the phone page (**Monkey Island ambient walker**): one row of equal frames facing right, at the game's own pixel size, plus the number of frames. A flat background colour is made transparent.
+- **Monkey Island:** a pirate (an original character, drawn by `make_pirate.py`) strolls through the Monkey Island backgrounds you've uploaded, in slideshow order. With none uploaded, he walks through four built-in scenes along a coast: the harbour at dusk, a jungle path, a beach and the town at night (drawn by `make_scenes.py`). In an uploaded background his feet are 90% of the way down the picture. To put them on a particular row, end the file name with `_g` and the row number in the picture's own pixels, e.g. `dock_g130.png`. He walks off one side of the screen into the next place, now and then stops to look around, and sometimes says something. On red days he talks about the holiday, and any day he mentions what's going on: today's name days, your people's days and notes, snow, rain, frost or icy pavements, and a kitchen timer that's running. The next scene loads in the background while the screen fades, so the walk doesn't hitch. When it's really raining or snowing in Riga, pixel rain or snow falls over the scenes, in his walk and in the launcher itself. You can swap in a walk cycle of your own on the phone page (**Monkey Island ambient walker**): one row of equal frames facing right, at the game's own pixel size, plus the number of frames. A flat background colour is made transparent.
 
 Any button brings the launcher back; that first press does nothing else. Ambient mode doesn't start while music is playing. It keeps the screen on for up to two hours, then the TV's own sleep timer takes over.
 
@@ -123,7 +124,7 @@ A crackling fire fills the screen: a brick fireplace with logs, glowing embers, 
 
 **Sound** (in the gear menu, or Menu on the remote) plays a quiet crackling fire or gentle rain, or nothing (the default). It stops whenever another app is open.
 
-The fire **burns down with the evening**: from 23:00, or from an hour before the bedtime set on the phone page, it settles into glowing embers. That's a second loop, downloaded the first time. **Burn down** in the menu lets it die out over 30, 60 or 90 minutes: embers at once, the sound slowly fading, then the screen fades to black and the TV may go to sleep. Any button brings it back.
+The fire **burns down with the evening**: from 23:00, or from an hour before the bedtime set on the phone page, it settles into glowing embers. That's a second loop, downloaded the first time. **Sound: auto** plays rain on the window when it's raining in Riga, and the fire otherwise. **Burn down** in the menu lets it die out over 30, 60 or 90 minutes: embers at once, the sound slowly fading, then the screen fades to black and the TV may go to sleep. Any button brings it back.
 
 The fire is a pre-rendered, seamless 20-second loop played by the TV's video decoder (`web/fireplace.html` draws it; `node web/render_fireplace.js assets/fireplace/fireplace.mp4 assets/fireplace/fireplace.jpg` renders it). The sounds are synthesised, not recorded: `python3 web/make_sounds.py assets/fireplace` makes them as seamless 60-second loops.
 
@@ -136,7 +137,7 @@ A practical launcher for the morning, set like the front page of a paper about y
 - **Three short columns:**
   - **Today:** the red day and your people's days and notes.
   - **Tomorrow:** the 08:00 weather and high, a red day, name days, and tomorrow's reminders.
-  - **Sun & moon:** sunrise, sunset, the day's length and how much light tomorrow gains or loses, and the moon's phase.
+  - **Sun & moon:** sunrise, sunset, the day's length and how much light tomorrow gains or loses, and the moon's phase. From midwinter to midsummer it also counts the light gained since the shortest day ("+54 min of light since midwinter").
 - **The week:** seven columns with each day's high and low, rain or snow in millimetres, and red days in carmine.
 - **The apps** are a quiet row of links along the bottom.
 
@@ -144,7 +145,7 @@ It's warm paper by day and dark paper after sunset, redrawn once a minute and ne
 
 ## Play
 
-A practical launcher of big tiles that each start something in one press: "Evening playlist", "News", "Continue watching". You set the tiles up on the phone page (up to six). Each has a name, an app, and optionally a link the app opens straight to. For example, a Spotify playlist: in Spotify on your phone, use Share → Copy link and paste it, and the page turns it into a link the TV's Spotify opens directly. A tile without a link just opens its app. A tile can have a **time limit** (15 minutes to 1½ hours) that starts a kitchen timer when it's pressed, which is handy for kids' shows. **▶** on the phone page tries a tile on the TV straight away, to check its link. Pressing a tile fades the screen gently to a warm dark before the app opens. Until you set any up, Play shows one tile per home-screen app.
+A practical launcher of big tiles that each start something in one press: "Evening playlist", "News", "Continue watching". You set the tiles up on the phone page (up to six). Each has a name, an app, and optionally a link the app opens straight to. For example, a Spotify playlist: in Spotify on your phone, use Share → Copy link and paste it, and the page turns it into a link the TV's Spotify opens directly. A tile without a link just opens its app. A tile can have a **time limit** (15 minutes to 1½ hours) that starts a kitchen timer when it's pressed, which is handy for kids' shows. **▶** on the phone page tries a tile on the TV straight away, to check its link. Pressing a tile fades the screen gently to a warm dark before the app opens. The backdrop glows softly from below in the season's colour (cool in winter, green in spring, warm in summer, amber in autumn), dimmer after dark. Until you set any up, Play shows one tile per home-screen app.
 
 ## Window
 
@@ -155,7 +156,7 @@ The view from a window in a dim room, matched to the weather outside, the time o
 - **Other evenings:** the same candle on a clear summer night, the first stars over the rooftops.
 - **By day:** a weeping birch sways in the wind, with leaf shadows moving on the sill in summer. In winter the birch is bare and frosted and a few flakes drift down.
 
-The view changes on its own as the weather or the light changes. On cold days (3° or below) a faint mist of condensation covers the glass. On the name day or birthday of someone on your People list, their name is traced in the mist with a heart; on a red day, just a heart. Like the Fireplace, the clock sits dim in the corner and any button brings up the app strip. **Sound** can play rain or a crackling fire.
+The view changes on its own as the weather or the light changes. From 21:00 a small line under the clock tells you tomorrow morning's weather ("Tomorrow 08:00 -4°, snow"). On cold days (3° or below) a faint mist of condensation covers the glass. On the name day or birthday of someone on your People list, their name is traced in the mist with a heart; on a red day, just a heart. Like the Fireplace, the clock sits dim in the corner and any button brings up the app strip. **Sound** can play rain or a crackling fire.
 
 The views are seamless 20-second loops drawn by one shader (`web/window.html`) and rendered with `node web/render_window.js <0-4> scenes/window/<name>.mp4 assets/window/<name>.jpg`. Like the Apartment videos, they download from this repository the first time; the stills are built in.
 
@@ -187,7 +188,7 @@ Everything except the background is drawn on a 320×180 pixel grid. The verbs an
 
 ## Vinyl
 
-A launcher just for listening to Spotify. While music plays, the screen shows nothing but a record turning at 33⅓ rpm, with the album cover as its label. The background slowly fades between the cover's main colours and crossfades when the song changes. When you pause, the record slows to a stop like a turntable. A tonearm behaves like a real one. When music starts, it swings over from its rest and lowers onto the record. Pause lifts it in place, like a cue lever, and play lowers it again. When the music stops, it returns to its rest. While a song plays, the needle moves from the edge towards the label. When nothing is playing, there's an **Open Spotify** button and a gear. After sunset, the cover's main colour glows softly in from the edges of the screen, like a lamp.
+A launcher just for listening to Spotify. While music plays, the screen shows nothing but a record turning at 33⅓ rpm, with the album cover as its label. The background slowly fades between the cover's main colours and crossfades when the song changes. When you pause, the record slows to a stop like a turntable. A tonearm behaves like a real one. When music starts, it swings over from its rest and lowers onto the record. Pause lifts it in place, like a cue lever, and play lowers it again. When the music stops, it returns to its rest. While a song plays, the needle moves from the edge towards the label. When nothing is playing, there's an **Open Spotify** button and a gear. After sunset, the cover's main colour glows softly in from the edges of the screen, like a lamp. The remote's own media buttons (play/pause, next, previous) work too. **Stop playing** in the menu (30, 60 or 90 minutes) fades the music out over the last minute, pauses it, and puts the volume back.
 
 - **OK** plays or pauses. **Left/Right** skips to the previous or next track.
 - **Down** opens Spotify.

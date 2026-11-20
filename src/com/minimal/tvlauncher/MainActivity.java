@@ -57,7 +57,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     private LauncherTheme base;      // the launcher the user picked
     private View baseView;
     private VinylTheme vinyl;        // shown over it while music plays (null if base is Vinyl)
-    private MiniRecord mini;         // or this small record, over Fireplace and Window
+    private MiniRecord mini;         // or this small record, over Fireplace, Window and Apartment
     private boolean showingMini;
     private View vinylView;
     private NowPlaying music;
@@ -174,7 +174,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         container = new FrameLayout(this);
         baseView = base.createView();
         container.addView(baseView, new FrameLayout.LayoutParams(-1, -1));
-        if (base instanceof FireplaceTheme || base instanceof WindowTheme) {
+        if (base instanceof FireplaceTheme || base instanceof WindowTheme || base instanceof ApartmentTheme) {
             mini = new MiniRecord(this);
             int m = PanelMenu.dp(this, 36);
             FrameLayout.LayoutParams mp = new FrameLayout.LayoutParams(PanelMenu.dp(this, 460), PanelMenu.dp(this, 110),
@@ -270,6 +270,9 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         timerBar.refresh();
         if (base instanceof PlayTheme) {
             ((PlayTheme) base).refreshTiles();
+        }
+        if (base instanceof ApartmentTheme) {
+            ((ApartmentTheme) base).refreshBoard();
         }
         if (base instanceof PhotosTheme) {
             ((PhotosTheme) base).refreshEffects();

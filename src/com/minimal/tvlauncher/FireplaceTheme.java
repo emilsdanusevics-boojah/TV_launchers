@@ -36,7 +36,7 @@ class FireplaceTheme implements LauncherTheme {
 
     private static final long STRIP_SHOWN_MS = 10000;
     private static final float SOUND_VOLUME = 0.35f;
-    private static final String[] SOUNDS = {"off", "fire", "rain"};
+    private static final String[] SOUNDS = {"off", "fire", "rain", "auto"};   // auto: rain when it rains outside
     private static final int FG = PanelMenu.FG;
     private static final int MUTED = PanelMenu.MUTED;
     private static final int ACCENT = 0xFFE59A4F;   // firelight
@@ -301,6 +301,9 @@ class FireplaceTheme implements LauncherTheme {
         ambientClock.tick();
         if (fire != null) {
             updateFire();
+            if (player != null && "auto".equals(sound()) && !soundFile().equals(soundPlaying)) {
+                startSound();   // the rain started or stopped
+            }
         }
     }
 
@@ -389,13 +392,25 @@ class FireplaceTheme implements LauncherTheme {
         return prefs.getString("fireplace_sound", "off");
     }
 
+    private String soundPlaying;
+
+    // "auto" follows the weather: rain on the window when it's raining, otherwise the fire.
+    private String soundFile() {
+        String s = sound();
+        if ("auto".equals(s)) {
+            return PixelWeather.kindFor(Weather.cached()) == PixelWeather.RAIN ? "rain" : "fire";
+        }
+        return s;
+    }
+
     private void startSound() {
         stopSound();
-        if ("off".equals(sound())) {
+        soundPlaying = soundFile();
+        if ("off".equals(soundPlaying)) {
             return;
         }
         try {
-            AssetFileDescriptor fd = activity.getAssets().openFd("fireplace/" + sound() + ".ogg");
+            AssetFileDescriptor fd = activity.getAssets().openFd("fireplace/" + soundPlaying + ".ogg");
             player = new MediaPlayer();
             player.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
             fd.close();

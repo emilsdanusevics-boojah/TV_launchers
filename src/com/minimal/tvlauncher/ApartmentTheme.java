@@ -57,6 +57,7 @@ class ApartmentTheme implements LauncherTheme {
     private TextView holidayLine;
     private TextView fetchLine;      // "Fetching the room video · 34%" the first time
     private TextView glanceLine;     // today's or tomorrow's weather, like Photos' card
+    private TextView boardLine;      // people's days and notes from the phone page
     private LinearLayout bar;
     private LinearLayout appRow;
     private ImageView gear;
@@ -141,6 +142,13 @@ class ApartmentTheme implements LauncherTheme {
         glanceLine.setShadowLayer(dp(6), 0, dp(1), 0x99000000);
         glanceLine.setVisibility(View.GONE);
         clock.addView(glanceLine, under(6));
+        boardLine = PanelMenu.text(activity, medium, 14, FG);
+        boardLine.setSingleLine(false);
+        boardLine.setMaxLines(3);
+        boardLine.setLineSpacing(dp(3), 1f);
+        boardLine.setShadowLayer(dp(6), 0, dp(1), 0x99000000);
+        boardLine.setVisibility(View.GONE);
+        clock.addView(boardLine, under(8));
         fetchLine = PanelMenu.text(activity, medium, 13, MUTED);
         fetchLine.setVisibility(View.GONE);
         clock.addView(fetchLine, under(10));
@@ -238,6 +246,20 @@ class ApartmentTheme implements LauncherTheme {
         }
     }
 
+    /** People's days and notes, up to three lines, as on Photos. */
+    void refreshBoard() {
+        java.util.List<String> lines = Board.lines(activity, java.util.Calendar.getInstance());
+        if (lines.size() > 3) {
+            lines = lines.subList(0, 3);
+        }
+        boardLine.setVisibility(lines.isEmpty() ? View.GONE : View.VISIBLE);
+        StringBuilder b = new StringBuilder();
+        for (String l : lines) {
+            b.append(b.length() > 0 ? "\n" : "").append("•  ").append(l);
+        }
+        boardLine.setText(b.toString());
+    }
+
     // The glance card's first lines, so choosing the cozy room doesn't mean losing the forecast.
     private void showGlance() {
         Date now = new Date();
@@ -266,6 +288,7 @@ class ApartmentTheme implements LauncherTheme {
         date.setText(DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEdMMMM"), now));
         showHoliday();   // a new day may be a red day
         showGlance();
+        refreshBoard();
         ambientClock.tick();
     }
 

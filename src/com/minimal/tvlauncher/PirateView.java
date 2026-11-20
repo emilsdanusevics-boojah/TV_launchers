@@ -87,6 +87,7 @@ final class PirateView extends View {
     private Canvas gridCanvas;
 
     private boolean running;
+    private final PixelWeather weather = new PixelWeather();   // the real rain or snow, in pixels
     private int scene;
     private int x;                 // left edge of his frame, in grid pixels
     private int dir = 1;           // +1 walking right, -1 left
@@ -479,6 +480,10 @@ final class PirateView extends View {
         if (speech != null) {
             drawSpeech(c, gw, feet - drawH() - 3);
         }
+
+        // Rain or snow, if it's really raining or snowing outside.
+        weather.setKind(PixelWeather.kindFor(Weather.cached()));
+        weather.draw(c, gw, gh, TICK_MS / 1000f);
 
         // A small clock in the top-right corner.
         int cw = (int) Math.ceil(textPaint.measureText(clock)) * 2;

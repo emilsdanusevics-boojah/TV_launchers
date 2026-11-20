@@ -113,6 +113,12 @@ class NowPlaying {
         }
     }
 
+    void pause() {
+        if (controller != null && state == PLAYING) {
+            controller.getTransportControls().pause();
+        }
+    }
+
     void next() {
         if (controller != null) {
             controller.getTransportControls().skipToNext();

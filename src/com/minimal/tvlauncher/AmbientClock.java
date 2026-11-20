@@ -19,6 +19,7 @@ import java.util.Random;
 final class AmbientClock extends TextView {
 
     private final Random random = new Random();
+    private String note;
 
     AmbientClock(Context context) {
         super(context);
@@ -55,9 +56,22 @@ final class AmbientClock extends TextView {
         }
     }
 
+    /** A short line under the time (a name day, a reminder), or null. */
+    void setNote(String text) {
+        note = text;
+    }
+
     /** The new time, and a small move. Call every minute. */
     void tick() {
-        setText(DateFormat.format(DateFormat.is24HourFormat(getContext()) ? "HH:mm" : "h:mm", new Date()));
+        String time = DateFormat.format(DateFormat.is24HourFormat(getContext()) ? "HH:mm" : "h:mm", new Date()).toString();
+        if (note == null || note.isEmpty()) {
+            setText(time);
+        } else {
+            android.text.SpannableString s = new android.text.SpannableString(time + "\n" + note);
+            s.setSpan(new android.text.style.RelativeSizeSpan(0.42f), time.length(), s.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            setText(s);
+        }
+        setGravity(android.view.Gravity.END);
         int d = PanelMenu.dp(getContext(), 18);
         setTranslationX(-random.nextInt(d));
         setTranslationY(-random.nextInt(d));

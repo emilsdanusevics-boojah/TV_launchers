@@ -45,6 +45,7 @@ class PlayTheme implements LauncherTheme {
     private PanelMenu menu;
     private AmbientClock ambientClock;
     private View curtain;    // a warm fade to dark as a tile starts
+    private FrameLayout root;
     private List<Apps.Entry> apps = new ArrayList<Apps.Entry>();
 
     PlayTheme(MainActivity activity) {
@@ -59,7 +60,7 @@ class PlayTheme implements LauncherTheme {
     public View createView() {
         light = Typeface.createFromAsset(activity.getAssets(), "fonts/HankenGrotesk-300.ttf");
         medium = Typeface.createFromAsset(activity.getAssets(), "fonts/HankenGrotesk-500.ttf");
-        FrameLayout root = new FrameLayout(activity);
+        root = new FrameLayout(activity);
         root.setBackgroundColor(BG);
 
         LinearLayout clock = new LinearLayout(activity);
@@ -287,6 +288,29 @@ class PlayTheme implements LauncherTheme {
         time.setText(DateFormat.format(DateFormat.is24HourFormat(activity) ? "HH:mm" : "h:mm", now));
         date.setText(DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEdMMMM"), now));
         ambientClock.tick();
+        paintBackdrop();
+    }
+
+    // A quiet backdrop that follows the season and the light: a soft glow from below in the
+    // season's colour (cool in winter, green in spring, warm in summer, amber in autumn),
+    // dimmer after dark.
+    private void paintBackdrop() {
+        int month = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH);
+        int tint;
+        if (month == java.util.Calendar.DECEMBER || month <= java.util.Calendar.FEBRUARY) {
+            tint = 0xFF1B2230;
+        } else if (month <= java.util.Calendar.MAY) {
+            tint = 0xFF1B2A1F;
+        } else if (month <= java.util.Calendar.AUGUST) {
+            tint = 0xFF2C2618;
+        } else {
+            tint = 0xFF2E1E14;
+        }
+        if (DayArc.dark(new Date())) {
+            tint = 0xFF000000 | ((((tint >> 16) & 255) * 3 / 4) << 16) | ((((tint >> 8) & 255) * 3 / 4) << 8) | ((tint & 255) * 3 / 4);
+        }
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[] {tint, BG, BG});
+        root.setBackground(g);
     }
 
     @Override

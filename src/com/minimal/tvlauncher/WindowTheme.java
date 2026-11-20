@@ -51,6 +51,7 @@ class WindowTheme implements LauncherTheme {
     private TextView time;
     private TextView date;
     private TextView fetchLine;
+    private TextView tomorrowLine;   // late evening: tomorrow morning's weather
     private String scene;
     private MistView mist;
     private LinearLayout clock;
@@ -149,8 +150,21 @@ class WindowTheme implements LauncherTheme {
         mist.set(cold, text);
     }
 
+    // From 21:00 until 02:00, a line about tomorrow morning: "Tomorrow 08:00 -4°, snow".
+    private void updateTomorrow() {
+        int h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        java.util.List<String> t = (h >= 21 || h < 2) ? Glance.tomorrow(activity, Weather.cached(), new Date())
+                : new java.util.ArrayList<String>();
+        boolean show = !t.isEmpty() && t.get(0).startsWith("08:00");
+        tomorrowLine.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (show) {
+            tomorrowLine.setText("Tomorrow " + t.get(0));
+        }
+    }
+
     private void updateScene() {
         updateMist();
+        updateTomorrow();
         String next = sceneFor(new Date(), Weather.cached());
         if (next.equals(scene)) {
             return;
@@ -237,6 +251,13 @@ class WindowTheme implements LauncherTheme {
         fetchParams.topMargin = dp(8);
         fetchParams.leftMargin = dp(3);
         clock.addView(fetchLine, fetchParams);
+        tomorrowLine = PanelMenu.text(activity, medium, 13, FG);
+        tomorrowLine.setVisibility(View.GONE);
+        tomorrowLine.setShadowLayer(dp(6), 0, dp(1), 0xCC000000);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2);
+        tp.topMargin = dp(8);
+        tp.leftMargin = dp(3);
+        clock.addView(tomorrowLine, tp);
         for (TextView t : new TextView[] {time, date}) {
             t.setShadowLayer(dp(6), 0, dp(1), 0xCC000000);
         }

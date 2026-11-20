@@ -204,6 +204,26 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
             showSettingsMenu();
             return true;
         }
+        // The remote's own media buttons work everywhere on this screen.
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+            case KeyEvent.KEYCODE_MEDIA_PLAY:
+            case KeyEvent.KEYCODE_MEDIA_PAUSE:
+                if (event.getRepeatCount() == 0) {
+                    nowPlaying.playPause();
+                }
+                return true;
+            case KeyEvent.KEYCODE_MEDIA_NEXT:
+            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
+                nowPlaying.next();
+                return true;
+            case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+            case KeyEvent.KEYCODE_MEDIA_REWIND:
+                nowPlaying.previous();
+                return true;
+            default:
+                break;
+        }
         if (menu.getVisibility() == View.VISIBLE || idle.getVisibility() == View.VISIBLE) {
             return false;   // the buttons handle the remote
         }
@@ -244,6 +264,7 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
 
     @Override
     public void onDestroy() {
+        stopHandler.removeCallbacks(stopTick);
         nowPlaying.stop();
     }
 
@@ -311,8 +332,70 @@ class VinylTheme implements LauncherTheme, NowPlaying.Listener {
 
     // ---- Menu ----
 
+    // ---- Stop playing after a while ----
+
+    private static final int[] STOP_MINUTES = {0, 30, 60, 90};
+    private static final long FADE_MS = 60000;
+    private final android.os.Handler stopHandler = new android.os.Handler();
+    private long stopAt;          // 0 = no timer
+    private int volumeBefore = -1;
+
+    // In the last minute the music fades out, then it pauses and the volume comes back.
+    private final Runnable stopTick = new Runnable() {
+        @Override
+        public void run() {
+            if (stopAt == 0) {
+                return;
+            }
+            android.media.AudioManager audio = (android.media.AudioManager) activity.getSystemService(android.content.Context.AUDIO_SERVICE);
+            long left = stopAt - System.currentTimeMillis();
+            if (left <= 0) {
+                nowPlaying.pause();
+                stopAt = 0;
+                if (audio != null && volumeBefore >= 0) {
+                    final int restore = volumeBefore;
+                    final android.media.AudioManager a = audio;
+                    stopHandler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            a.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, restore, 0);
+                        }
+                    }, 2000);
+                }
+                volumeBefore = -1;
+                return;
+            }
+            if (left <= FADE_MS && audio != null) {
+                if (volumeBefore < 0) {
+                    volumeBefore = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC);
+                }
+                int v = Math.round(volumeBefore * (left / (float) FADE_MS));
+                audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, v, 0);
+            }
+            stopHandler.postDelayed(this, left <= FADE_MS ? 2000 : Math.min(30000, left - FADE_MS + 100));
+        }
+    };
+
     private void showSettingsMenu() {
         openMenu("Settings");
+        final int left = stopAt == 0 ? 0 : (int) Math.ceil((stopAt - System.currentTimeMillis()) / 60000.0);
+        addMenuItem(left == 0 ? "Stop playing: off" : "Stop playing in " + left + " min", new Runnable() {
+            @Override
+            public void run() {
+                // Off → 30 → 60 → 90 minutes → off.
+                int next = 1;
+                for (int i = 1; i < STOP_MINUTES.length; i++) {
+                    if (left > 0 && left <= STOP_MINUTES[i]) {
+                        next = (i + 1) % STOP_MINUTES.length;
+                        break;
+                    }
+                }
+                stopHandler.removeCallbacks(stopTick);
+                stopAt = STOP_MINUTES[next] == 0 ? 0 : System.currentTimeMillis() + STOP_MINUTES[next] * 60000L;
+                stopTick.run();
+                showSettingsMenu();
+            }
+        });
         addMenuItem("Open Spotify", new Runnable() {
             @Override
             public void run() {

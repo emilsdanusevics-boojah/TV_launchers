@@ -51,6 +51,21 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
     private final Handler handler = new Handler();
     private ScummView scumm;
     private PirateView pirate;
+    private PixelWeather.Overlay pixelWeather;   // rain or snow over the scene when it's real
+    private static final long WEATHER_EVERY_MS = 15 * 60 * 1000;
+
+    private final Runnable weatherTimer = new Runnable() {
+        @Override
+        public void run() {
+            Weather.refresh(new Weather.Callback() {
+                @Override
+                public void onWeather(Weather.Now now) {
+                    pixelWeather.setWeather(now);
+                }
+            });
+            handler.postDelayed(this, WEATHER_EVERY_MS);
+        }
+    };
     private ImageView background;
     private ImageView backgroundTop;
     private String backgroundKey;
@@ -110,6 +125,10 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
         int sceneHeight = ScummView.sceneHeight(activity, Math.min(screen.x, screen.y));
         background.getLayoutParams().height = sceneHeight;
         backgroundTop.getLayoutParams().height = sceneHeight;
+        // Pixel rain or snow over the scene, under the verb panel.
+        pixelWeather = new PixelWeather.Overlay(activity);
+        pixelWeather.setWeather(Weather.cached());
+        ((android.widget.FrameLayout) root).addView(pixelWeather, 2, new android.widget.FrameLayout.LayoutParams(-1, sceneHeight));
 
         List<ScummView.Verb> verbs = new ArrayList<ScummView.Verb>();
         verbs.add(new ScummView.Verb(OPEN, "Open", null, true));
@@ -163,6 +182,9 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
 
     @Override
     public void onResume() {
+        pixelWeather.setRunning(true);
+        handler.removeCallbacks(weatherTimer);
+        weatherTimer.run();
         updateBackground(false);
         scumm.requestFocus();
         handler.removeCallbacks(speak);
@@ -172,6 +194,8 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
 
     @Override
     public void onPause() {
+        pixelWeather.setRunning(false);
+        handler.removeCallbacks(weatherTimer);
         handler.removeCallbacks(rotateBackground);
         pirate.stop();
         handler.removeCallbacks(speak);
@@ -206,6 +230,7 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
 
     @Override
     public void onDestroy() {
+        handler.removeCallbacks(weatherTimer);
         handler.removeCallbacks(rotateBackground);
         handler.removeCallbacks(speak);
         handler.removeCallbacks(hush);

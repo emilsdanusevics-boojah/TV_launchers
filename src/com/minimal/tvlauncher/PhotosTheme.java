@@ -418,6 +418,9 @@ class PhotosTheme implements LauncherTheme {
         showHoliday();
         showBoard();
         showGlance();
+        // In ambient mode, under the small clock: today's first reminder, or the name days.
+        List<String> todays = Board.todayLines(activity, Calendar.getInstance());
+        ambientClock.setNote(!todays.isEmpty() ? todays.get(0) : (today == null ? null : "Vārda dienas · " + today));
         ambientClock.tick();
     }
 
