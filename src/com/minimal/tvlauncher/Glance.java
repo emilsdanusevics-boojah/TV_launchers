@@ -43,60 +43,75 @@ final class Glance {
 
     /** The card's lines, or an empty list. */
     static List<String> lines(Context context, Weather.Now w, Date now) {
-        List<String> out = new ArrayList<String>();
         String title = title(now);
-        if (title == null || w == null || w.hourTime.length == 0 || System.currentTimeMillis() - w.fetchedAt > STALE_MS) {
-            return out;
+        if (title == null) {
+            return new ArrayList<String>();
         }
-        int at = index(w, now);
+        return title.equals("Today") ? today(w, now) : tomorrow(context, w, now);
+    }
+
+    /** Now and the rest of today: temperature, what to wear, rain or snow coming or going, ice. */
+    static List<String> today(Weather.Now w, Date now) {
+        List<String> out = new ArrayList<String>();
+        int at = usable(w) ? index(w, now) : -1;
         if (at < 0) {
             return out;
         }
-        if (title.equals("Today")) {
-            double feels = w.hourFeels[at];
-            out.add(Math.round(w.tempC) + "°, feels like " + Math.round(feels) + "° · " + wear(feels));
-            String change = rainChange(w, at);
-            if (change != null) {
-                out.add(change);
-            }
-            if (icy(w, at)) {
-                out.add("Icy pavements likely");
-            }
-        } else {
-            Calendar tomorrow = Calendar.getInstance(RIGA);
-            tomorrow.setTime(now);
-            if (hour(now) >= 18) {
-                tomorrow.add(Calendar.DAY_OF_MONTH, 1);
-            }
-            String day = new SimpleDateFormat("yyyy-MM-dd", Locale.ROOT) {{ setTimeZone(RIGA); }}.format(tomorrow.getTime());
-            int morning = find(w, day + "T08:00");
-            if (morning >= 0) {
-                double high = -99;
-                for (int i = morning; i < Math.min(w.hourTime.length, morning + 12); i++) {
-                    high = Math.max(high, w.hourTemp[i]);
-                }
-                out.add("08:00 " + Math.round(w.hourTemp[morning]) + "°, " + word(w.hourCode[morning])
-                        + " · up to " + Math.round(high) + "°");
-            }
-            String sunrise = null;
-            for (String s : w.sunrise) {
-                if (s != null && s.startsWith(day) && s.length() >= 16) {
-                    sunrise = s.substring(11, 16);
-                }
-            }
-            if (sunrise != null) {
-                out.add("Sunrise " + sunrise);
-            }
-            Holidays.Day red = Holidays.on(tomorrow);
-            if (red != null) {
-                out.add("Red day: " + red.name);
-            }
-            String names = NameDays.on(context, tomorrow);
-            if (names != null) {
-                out.add("Name days: " + names);
-            }
+        double feels = w.hourFeels[at];
+        out.add(Math.round(w.tempC) + "°, feels like " + Math.round(feels) + "° · " + wear(feels));
+        String change = rainChange(w, at);
+        if (change != null) {
+            out.add(change);
+        }
+        if (icy(w, at)) {
+            out.add("Icy pavements likely");
         }
         return out;
+    }
+
+    /** Tomorrow (or, after midnight, today): the morning's weather, the high, sunrise, red day, name days. */
+    static List<String> tomorrow(Context context, Weather.Now w, Date now) {
+        List<String> out = new ArrayList<String>();
+        if (!usable(w)) {
+            return out;
+        }
+        Calendar tomorrow = Calendar.getInstance(RIGA);
+        tomorrow.setTime(now);
+        if (hour(now) >= 2) {
+            tomorrow.add(Calendar.DAY_OF_MONTH, 1);
+        }
+        String day = new SimpleDateFormat("yyyy-MM-dd", Locale.ROOT) {{ setTimeZone(RIGA); }}.format(tomorrow.getTime());
+        int morning = find(w, day + "T08:00");
+        if (morning >= 0) {
+            double high = -99;
+            for (int i = morning; i < Math.min(w.hourTime.length, morning + 12); i++) {
+                high = Math.max(high, w.hourTemp[i]);
+            }
+            out.add("08:00 " + Math.round(w.hourTemp[morning]) + "°, " + word(w.hourCode[morning])
+                    + " · up to " + Math.round(high) + "°");
+        }
+        String sunrise = null;
+        for (String s : w.sunrise) {
+            if (s != null && s.startsWith(day) && s.length() >= 16) {
+                sunrise = s.substring(11, 16);
+            }
+        }
+        if (sunrise != null) {
+            out.add("Sunrise " + sunrise);
+        }
+        Holidays.Day red = Holidays.on(tomorrow);
+        if (red != null) {
+            out.add("Red day: " + red.name);
+        }
+        String names = NameDays.on(context, tomorrow);
+        if (names != null) {
+            out.add("Name days: " + names);
+        }
+        return out;
+    }
+
+    private static boolean usable(Weather.Now w) {
+        return w != null && w.hourTime.length > 0 && System.currentTimeMillis() - w.fetchedAt <= STALE_MS;
     }
 
     // ---- Reading the forecast ----
@@ -179,7 +194,7 @@ final class Glance {
         return "no jacket needed";
     }
 
-    private static String word(String code) {
+    static String word(String code) {
         if (code == null) {
             return "";
         }

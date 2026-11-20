@@ -1,14 +1,15 @@
 # Minimal TV Launcher
 
-A home screen for Android TV / Xiaomi TV with six looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
+A home screen for Android TV / Xiaomi TV with eight looks. You can switch between them from the settings menu in any of them, or from your phone; the choice is remembered.
 
 ## Automatic
 
 These run on their own, for every launcher. Each can be changed or turned off on the phone page (**Automatic**).
 
-- **Autopilot** picks the launcher for you: Photos by day, Fireplace after sunset, Window on rainy or snowy evenings and Monkey Island on red days (you choose which ones). It only switches when the home screen comes back or ambient mode starts, never while you're using it. If you choose a launcher yourself, Autopilot leaves it alone until the next change: from day to evening, evening to the next day, or onto a red day. Choose the same launcher in the same part of the day on two different days and Autopilot learns it: that becomes the launcher for that part of the day, and the TV says so.
+- **Autopilot** picks the launcher for you: Rīts in the morning (05:00–10:00), Photos by day, Fireplace after sunset, Window on rainy or snowy evenings and Monkey Island on red days (you choose which ones). It only switches when the home screen comes back or ambient mode starts, never while you're using it. If you choose a launcher yourself, Autopilot leaves it alone until the next change: from day to evening, evening to the next day, or onto a red day. Choose the same launcher in the same part of the day on two different days and Autopilot learns it: that becomes the launcher for that part of the day, and the TV says so.
 - **Evening light (Day Arc)** follows the real sun over Riga. After sunset a warm, dim veil settles over the launcher, deeper after 23:00, and it lifts again at dawn. It's lighter on Fireplace and Apartment, which are evening scenes already.
 - **Bedtime** (off by default): from the chosen hour, once the TV is idle in ambient mode, the screen fades to black over ten minutes. After that the TV is allowed to go to sleep. Any button brings it back.
+- **Kitchen timers**: start one from the phone page ("Tea", 4 minutes; quick buttons for 3–30 minutes). It counts down in a small pill at the top of the screen over any launcher, keeps the screen on, and chimes softly when it's done (again every 20 seconds, three times). Any button on the remote stops the chime; that press does nothing else.
 - **Music over the fire**: when Spotify plays over the Fireplace or Window launcher, a small record turns in the bottom-right corner with the cover and the track, and the full Vinyl screen doesn't take over. You can switch back to the full screen on the phone page.
 - **Glance card on Photos**:
   - **Mornings (05:00–11:00):** a "Today" card shows the temperature and how cold it feels, what to wear, when rain or snow starts or stops (with "take an umbrella"), and "Icy pavements likely" after wet weather turns freezing.
@@ -123,6 +124,25 @@ A crackling fire fills the screen: a brick fireplace with logs, glowing embers, 
 
 The fire is a pre-rendered, seamless 20-second loop played by the TV's video decoder (`web/fireplace.html` draws it; `node web/render_fireplace.js assets/fireplace/fireplace.mp4 assets/fireplace/fireplace.jpg` renders it). The sounds are synthesised, not recorded: `python3 web/make_sounds.py assets/fireplace` makes them as seamless 60-second loops.
 
+## Rīts
+
+A practical launcher for the morning, set like the front page of a paper about your own day:
+
+- **Across the top:** the date in Latvian, today's name days and the time.
+- **The headline:** the weather now, with what to wear, when rain or snow starts or stops, and an ice warning. Below it, the next twelve hours are drawn as a strip: the temperature as a line with figures, and rain or snow as bars.
+- **Three short columns:**
+  - **Today:** the red day and your people's days and notes.
+  - **Tomorrow:** the 08:00 weather and high, a red day, name days, and tomorrow's reminders.
+  - **Sun & moon:** sunrise, sunset, the day's length and how much light tomorrow gains or loses, and the moon's phase.
+- **The week:** seven columns with each day's high and low, rain or snow in millimetres, and red days in carmine.
+- **The apps** are a quiet row of links along the bottom.
+
+It's warm paper by day and dark paper after sunset, redrawn once a minute and never animated. Autopilot shows it in the mornings, then hands over to the day's launcher.
+
+## Play
+
+A practical launcher of big tiles that each start something in one press: "Evening playlist", "News", "Continue watching". You set the tiles up on the phone page (up to six). Each has a name, an app, and optionally a link the app opens straight to. For example, a Spotify playlist: in Spotify on your phone, use Share → Copy link and paste it, and the page turns it into a link the TV's Spotify opens directly. A tile without a link just opens its app. Until you set any up, Play shows one tile per home-screen app.
+
 ## Window
 
 The view from a window in a dim room, matched to the weather outside, the time of day and the season:
@@ -200,6 +220,8 @@ While the launcher is running, it serves a small page on your home Wi-Fi at **ht
 - set how long until ambient mode starts, or turn it off
 - set up Autopilot, evening light, bedtime and the weather on Photos
 - add people (name days, birthdays) and notes for the Photos launcher
+- start and stop kitchen timers
+- set up the Play launcher's tiles
 - upload your own walk sprite sheet for Monkey Island's ambient mode
 - show, hide, reorder and rename apps
 - upload and delete photos for the Photos launcher

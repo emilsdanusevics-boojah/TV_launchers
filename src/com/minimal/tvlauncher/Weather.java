@@ -24,7 +24,8 @@ final class Weather {
     private static final String URL_STRING = "https://api.open-meteo.com/v1/forecast"
             + "?latitude=56.9606&longitude=24.1300"
             + "&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m"
-            + "&daily=sunrise,sunset&timezone=Europe%2FRiga&forecast_days=2"
+            + "&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code"
+            + "&timezone=Europe%2FRiga&forecast_days=7"
             + "&hourly=temperature_2m,apparent_temperature,precipitation,weather_code&past_hours=12&forecast_hours=36";
     private static final long FRESH_MS = 15 * 60 * 1000;
     private static final TimeZone RIGA = TimeZone.getTimeZone("Europe/Riga");
@@ -46,6 +47,12 @@ final class Weather {
         double[] hourFeels = new double[0];
         double[] hourRain = new double[0];      // precipitation, mm
         String[] hourCode = new String[0];
+        // Day by day for the week ahead, starting today.
+        String[] dayDate = new String[0];      // "yyyy-MM-dd"
+        double[] dayHigh = new double[0];
+        double[] dayLow = new double[0];
+        double[] dayRain = new double[0];      // mm
+        String[] dayCode = new String[0];
 
         /** e.g. "11° · Mainly clear · Sunset 17:58". */
         String line() {
@@ -150,6 +157,17 @@ final class Weather {
             if (daily != null) {
                 now.sunrise = strings(daily.optJSONArray("sunrise"));
                 now.sunset = strings(daily.optJSONArray("sunset"));
+                now.dayDate = strings(daily.optJSONArray("time"));
+                now.dayHigh = numbers(daily.optJSONArray("temperature_2m_max"), now.dayDate.length);
+                now.dayLow = numbers(daily.optJSONArray("temperature_2m_min"), now.dayDate.length);
+                now.dayRain = numbers(daily.optJSONArray("precipitation_sum"), now.dayDate.length);
+                double[] dc = numbers(daily.optJSONArray("weather_code"), now.dayDate.length);
+                now.dayCode = new String[dc.length];
+                for (int i = 0; i < dc.length; i++) {
+                    Now d = new Now();
+                    describe(d, (int) dc[i]);
+                    now.dayCode[i] = d.code;
+                }
             }
             JSONObject hourly = root.optJSONObject("hourly");
             if (hourly != null) {

@@ -91,6 +91,35 @@
   </section>
 
   <section>
+    <h2>Timers</h2>
+    <div id="timers"></div>
+    <div class="row">
+      <input type="text" id="timerLabel" maxlength="24" placeholder="What, e.g. Tea" aria-label="Timer name">
+    </div>
+    <div class="seg" id="timerQuick" style="margin-top: 10px"></div>
+    <div class="row">
+      <input type="number" id="timerMinutes" min="1" max="240" value="12" inputmode="numeric" aria-label="Minutes" style="width: 6em">
+      <span>min</span>
+      <button type="button" id="timerStart">Start</button>
+    </div>
+    <p class="hint">Counts down at the top of the TV over any launcher, and chimes when it's done. Press any button on the remote to stop the chime.</p>
+  </section>
+
+  <section>
+    <h2>Play tiles</h2>
+    <div id="play"></div>
+    <div class="row">
+      <input type="text" id="playLabel" maxlength="40" placeholder="Name, e.g. Evening playlist" aria-label="Tile name">
+      <select id="playApp" aria-label="App"></select>
+    </div>
+    <div class="row">
+      <input type="text" id="playLink" maxlength="500" placeholder="Link (optional), e.g. spotify:playlist:…" aria-label="Link">
+      <button type="button" id="playAdd">Add tile</button>
+    </div>
+    <p class="hint">Big tiles for the Play launcher, up to six, each starting something in one press. Without a link a tile opens the app. With one it opens straight to that link in the app, for example a Spotify playlist (in Spotify on your phone: Share → Copy link) or a YouTube channel. With no tiles set up, Play shows one per home-screen app.</p>
+  </section>
+
+  <section>
     <h2>Automatic</h2>
     <div id="auto"></div>
     <p class="hint"><b>Autopilot</b> picks the launcher by itself when the home screen comes back or ambient mode starts: one by day, another after sunset, another on red days. Choosing a launcher by hand wins until the next change. <b>Evening light</b> warms and dims the screen after sunset. At <b>bedtime</b>, if nobody's using the TV, it fades to black over ten minutes. <b>Weather on Photos</b>: rain on the glass, snow, frost below 0°, and holiday sparks. When music plays over the Fireplace or Window launcher, a <b>small record</b> turns in the corner instead of the full Vinyl screen.</p>
@@ -225,6 +254,10 @@ function render() {
 
   // People & notes
   renderBoard();
+
+  // Timers and Play tiles
+  renderTimers();
+  renderPlay();
 
   // Ambient walker
   const pir = $("pirate");
@@ -392,6 +425,122 @@ $("pirateFile").addEventListener("change", async (e) => {
   }
 });
 
+// ---- Timers ----
+
+let timerTick = null;
+function renderTimers() {
+  const box = $("timers");
+  const startedAt = Date.now();
+  const list = state.timers || [];
+  const draw = () => {
+    box.innerHTML = "";
+    if (!list.length) {
+      box.innerHTML = '<p class="empty">No timers running.</p>';
+      return;
+    }
+    for (const t of list) {
+      const left = Math.max(0, t.leftMs - (Date.now() - startedAt));
+      const s = Math.ceil(left / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      const r = document.createElement("div");
+      r.className = "row";
+      const label = document.createElement("span");
+      label.style.flex = "1";
+      label.textContent = t.label + " · " + (left === 0 ? "done" : (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0"));
+      const stop = button("✕", "Stop", false, async () => {
+        state = await api("DELETE", "/api/timer?id=" + t.id);
+        render();
+        toast("Timer stopped");
+      });
+      r.append(label, stop);
+      box.appendChild(r);
+    }
+  };
+  draw();
+  clearInterval(timerTick);
+  if (list.length) timerTick = setInterval(draw, 1000);
+}
+
+async function startTimer(minutes) {
+  const label = $("timerLabel").value.trim() || "Timer";
+  try {
+    state = await api("POST", "/api/timer", { label, seconds: Math.round(minutes * 60) });
+    render();
+    toast(label + ": " + minutes + " min");
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+for (const m of [3, 5, 10, 15, 20, 30]) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = m + " min";
+  b.onclick = () => startTimer(m);
+  $("timerQuick").appendChild(b);
+}
+$("timerStart").onclick = () => {
+  const m = parseFloat($("timerMinutes").value);
+  if (!(m > 0 && m <= 240)) { toast("1 to 240 minutes"); return; }
+  startTimer(m);
+};
+
+// ---- Play tiles ----
+
+async function savePlay(message) {
+  try {
+    state = await api("POST", "/api/play", state.play);
+    render();
+    toast(message);
+  } catch (err) {
+    toast(err.message);
+    state = await api("GET", "/api/state");
+    render();
+  }
+}
+
+function renderPlay() {
+  const tiles = state.play || [];
+  state.play = tiles;
+  const labels = Object.fromEntries(state.installed.map((a) => [a.pkg, a.label]));
+  const box = $("play");
+  box.innerHTML = "";
+  if (!tiles.length) box.innerHTML = '<p class="empty">No tiles yet. Play shows your home-screen apps until you add some.</p>';
+  tiles.forEach((t, i) => {
+    const r = document.createElement("div");
+    r.className = "row";
+    const name = document.createElement("span");
+    name.style.flex = "1";
+    name.textContent = t.label + " · " + (labels[t.pkg] || t.pkg) + (t.link ? " · link" : "");
+    const up = button("↑", "Move up", i === 0, () => { tiles.splice(i - 1, 0, tiles.splice(i, 1)[0]); savePlay("Moved"); });
+    const del = button("✕", "Remove", false, () => { tiles.splice(i, 1); savePlay("Removed"); });
+    r.append(name, up, del);
+    box.appendChild(r);
+  });
+  const sel = $("playApp");
+  if (!sel.options.length) {
+    for (const a of [...state.installed].sort((x, y) => x.label.localeCompare(y.label))) {
+      const o = document.createElement("option");
+      o.value = a.pkg;
+      o.textContent = a.label;
+      sel.appendChild(o);
+    }
+  }
+  $("playAdd").disabled = tiles.length >= 6;
+}
+
+$("playAdd").onclick = () => {
+  const label = $("playLabel").value.trim();
+  const pkg = $("playApp").value;
+  if (!label || !pkg) { toast("Give the tile a name and an app"); return; }
+  let link = $("playLink").value.trim();
+  // A Spotify share link becomes a link the TV's Spotify app opens directly.
+  const m = link.match(/^https:\/\/open\.spotify\.com\/(?:intl-[a-z]+\/)?(playlist|album|artist|track|show|episode)\/([A-Za-z0-9]+)/);
+  if (m) link = "spotify:" + m[1] + ":" + m[2];
+  state.play.push({ label, pkg, link });
+  $("playLabel").value = $("playLink").value = "";
+  savePlay("Added " + label);
+};
+
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function noteWhen(n) {
@@ -530,6 +679,7 @@ function renderAuto() {
     row(label, sel);
   };
   toggle("autopilot", "Autopilot");
+  pick("autopilot_morning", "Mornings", ["none", "Same as by day"]);
   pick("autopilot_day", "By day");
   pick("autopilot_evening", "After sunset");
   pick("autopilot_weather", "Rainy evenings", ["none", "Same as after sunset"]);

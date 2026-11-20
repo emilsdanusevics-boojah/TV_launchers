@@ -40,6 +40,11 @@ final class Autopilot {
         return prefs(context).getString("autopilot_evening", "fireplace");
     }
 
+    /** The launcher for mornings (05:00–10:00), or NONE to keep to the time of day. */
+    static String morning(Context context) {
+        return prefs(context).getString("autopilot_morning", "rits");
+    }
+
     /** The launcher for rainy or snowy evenings, or NONE to keep to the evening one. */
     static String weather(Context context) {
         return prefs(context).getString("autopilot_weather", "window");
@@ -66,6 +71,12 @@ final class Autopilot {
         if (holidays && !NONE.equals(red) && Holidays.today() != null) {
             launcher.append(red);
             return date + " holiday";
+        }
+        int hour = c.get(java.util.Calendar.HOUR_OF_DAY);
+        String morning = morning(context);
+        if (hour >= 5 && hour < 10 && !NONE.equals(morning)) {
+            launcher.append(morning);
+            return date + " morning";
         }
         Weather.Now w = Weather.cached();
         String code = w == null ? "" : w.code;
@@ -114,6 +125,7 @@ final class Autopilot {
             if (last.endsWith("|" + id) && !last.startsWith(date + "|")) {
                 e.putString("autopilot_" + slot, id).remove("autopilot_learn_" + slot);
                 learned = "Autopilot will use " + name(id) + (slot.equals("holiday") ? " on red days"
+                        : slot.equals("morning") ? " in the mornings"
                         : slot.equals("weather") ? " on rainy evenings" : slot.equals("evening") ? " after sunset" : " by day")
                         + " from now on";
             } else {

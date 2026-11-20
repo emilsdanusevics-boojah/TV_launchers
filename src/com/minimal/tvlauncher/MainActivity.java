@@ -36,10 +36,10 @@ import java.util.List;
  * It also runs the phone page (see RemoteServer) and picks up changes made there or in
  * EditAppsActivity.
  */
-public class MainActivity extends Activity implements NowPlaying.Listener, Remote.Listener {
+public class MainActivity extends Activity implements NowPlaying.Listener, Remote.Listener, TimerBar.Listener {
 
-    static final String[] LAUNCHER_IDS = {"photos", "apartment", "fireplace", "window", "monkey_island", "vinyl"};
-    static final String[] LAUNCHER_NAMES = {"Photos", "Apartment", "Fireplace", "Window", "Monkey Island", "Vinyl"};
+    static final String[] LAUNCHER_IDS = {"photos", "rits", "play", "apartment", "fireplace", "window", "monkey_island", "vinyl"};
+    static final String[] LAUNCHER_NAMES = {"Photos", "Rīts", "Play", "Apartment", "Fireplace", "Window", "Monkey Island", "Vinyl"};
     static final String DEFAULT_LAUNCHER = "photos";
 
     private static final long PAUSED_COUNTS_AS_STOPPED_MS = 30000;
@@ -66,6 +66,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     private boolean resumed;
     private boolean ambient;
     private DayArc dayArc;
+    private TimerBar timerBar;
     // Set before the activity is rebuilt for Autopilot in ambient mode: go straight back into it.
     private static boolean resumeAmbient;
     private int swallowKeyUp = -1;   // the key that woke ambient mode; its release is ignored too
@@ -161,6 +162,10 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             base = new FireplaceTheme(this);
         } else if ("window".equals(launcher)) {
             base = new WindowTheme(this);
+        } else if ("rits".equals(launcher)) {
+            base = new RitsTheme(this);
+        } else if ("play".equals(launcher)) {
+            base = new PlayTheme(this);
         } else {
             base = new PhotosTheme(this);
         }
@@ -178,6 +183,11 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         dayArc = new DayArc(this);
         dayArc.setStrength(veilStrength(launcher));
         container.addView(dayArc, new FrameLayout.LayoutParams(-1, -1));
+        // Kitchen timers from the phone, over everything.
+        timerBar = new TimerBar(this, this);
+        FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(-1, -2, android.view.Gravity.TOP);
+        tp.topMargin = PanelMenu.dp(this, 18);
+        container.addView(timerBar, tp);
         setContentView(container);
         apps = Apps.load(this);
         base.setApps(apps);
@@ -255,6 +265,10 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     @Override
     public void onSettingsChanged() {
         dayArc.update(this);
+        timerBar.refresh();
+        if (base instanceof PlayTheme) {
+            ((PlayTheme) base).refreshTiles();
+        }
         if (base instanceof PhotosTheme) {
             ((PhotosTheme) base).refreshEffects();
             ((PhotosTheme) base).refreshBoard();
@@ -376,6 +390,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             active().onResume();
         }
         dayArc.update(this);
+        timerBar.start();
         restartIdleTimer();
         if (resumeAmbient) {
             resumeAmbient = false;
@@ -402,6 +417,7 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         handler.removeCallbacks(musicStopped);
         handler.removeCallbacks(goAmbient);
         leaveAmbient();
+        timerBar.stop();
         active().onPause();
         super.onPause();
     }
@@ -450,6 +466,14 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             return true;
         }
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            // A finished timer is ringing: this press just stops it.
+            if (Timers.anyDone()) {
+                Timers.dismissDone();
+                timerBar.refresh();
+                swallowKeyUp = event.getKeyCode();
+                restartIdleTimer();
+                return true;
+            }
             if (ambient) {
                 swallowKeyUp = event.getKeyCode();
                 leaveAmbient();
@@ -459,6 +483,26 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             restartIdleTimer();
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    // ---- Timers ----
+
+    @Override
+    public void onTimerDone() {
+        if (ambient) {
+            leaveAmbient();
+            restartIdleTimer();
+        }
+    }
+
+    @Override
+    public void onTimersActive(boolean active) {
+        // Keep the screen on while a timer counts down, so its end isn't missed.
+        if (active) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else if (!ambient) {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
     }
 
     /** Minutes without the remote before ambient mode; 0 = never. */
@@ -511,8 +555,8 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
     private static float veilStrength(String id) {
         if ("apartment".equals(id)) {
             return 0.4f;    // has its own evening lamps
-        } else if ("fireplace".equals(id) || "window".equals(id)) {
-            return 0.5f;
+        } else if ("fireplace".equals(id) || "window".equals(id) || "rits".equals(id)) {
+            return 0.5f;    // evening scenes already, or Rīts's own dark paper
         } else if ("vinyl".equals(id)) {
             return 0.7f;
         } else if ("monkey_island".equals(id)) {
