@@ -223,7 +223,51 @@ class MonkeyIslandTheme implements LauncherTheme, ScummView.Listener {
         for (String l : Board.todayLines(activity, java.util.Calendar.getInstance())) {
             lines.add("Don't forget: " + l + ".");
         }
+        lines.addAll(dayLines());
         return lines.isEmpty() ? null : lines.toArray(new String[0]);
+    }
+
+    // Things the pirate notices about the real day: name days, the weather, a timer running.
+    private List<String> dayLines() {
+        List<String> out = new ArrayList<String>();
+        String names = NameDays.today(activity);
+        if (names != null) {
+            String first = names.split(",")[0].trim();
+            out.add("Daudz laimes, " + first + "! It's your name day. I'd give you treasure, but I've only got this rope.");
+            if (names.contains(",")) {
+                out.add("Name days today: " + names + ". That's a lot of cake.");
+            }
+        }
+        Weather.Now w = Weather.cached();
+        if (w != null) {
+            long t = Math.round(w.tempC);
+            String code = w.code == null ? "" : w.code;
+            if (code.equals("snow")) {
+                out.add("Snow! I'm building a snow-parrot. It keeps flying off.");
+            } else if (code.contains("rain") || code.equals("drizzle") || code.equals("thunder")) {
+                out.add("Raining again. Good thing pirates are already wet most of the time.");
+            } else if (code.equals("fog")) {
+                out.add("Fog. Perfect for sneaking. Not so good for finding the shop.");
+            } else if (code.equals("clear") && !DayArc.dark(new Date())) {
+                out.add("Clear skies over Riga. Grand day for not digging up anything.");
+            }
+            if (t <= -5) {
+                out.add(t + "° out there. Even my bandana is shivering.");
+            } else if (t >= 25) {
+                out.add(t + "°! Too hot for a striped shirt. I'm wearing it anyway.");
+            }
+            for (String l : Glance.today(w, new Date())) {
+                if (l.startsWith("Icy")) {
+                    out.add("Watch your step out there. The pavements are slippery as a wet deck.");
+                }
+            }
+        }
+        for (Timers.Timer timer : Timers.all()) {
+            if (!timer.done()) {
+                out.add("Something's cooking. " + timer.label + ": " + Timers.format(timer.leftMs()) + " to go.");
+            }
+        }
+        return out;
     }
 
     // Today's lines, or null on an ordinary day (or with holidays turned off in the

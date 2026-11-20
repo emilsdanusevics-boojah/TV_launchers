@@ -39,6 +39,9 @@ import java.util.concurrent.Executors;
  *                                     "day_arc": bool, "bedtime": hour or -1, "photo_effects": bool}
  *   POST   /api/board                {"people": [{"name", "who", "birthday": "MM-DD"}], "notes": [{"text", "repeat": "once"|"weekly"|"monthly", "day"}]}
  *   POST   /api/play                 [{"label", "pkg", "link"}]   the Play launcher's tiles
+ *   POST   /api/play/try?index=n     start that tile on the TV now (to check its link)
+ *   POST   /api/scenes?group=g       download a launcher's videos now (apartment, window, fireplace)
+ *   DELETE /api/scenes?group=g       delete them to free space
  *   POST   /api/timer                {"label", "seconds"}   start a kitchen timer
  *   DELETE /api/timer?id=n           stop one
  *   POST   /api/apps                 [{"pkg": "...", "name": "..."}, ...]
@@ -352,6 +355,38 @@ class RemoteServer extends Thread {
             }
             Remote.settingsChanged();
             sendJson(out, state());
+        } else if (key.equals("POST /api/play/try")) {
+            int index;
+            try {
+                index = Integer.parseInt(req.query.get("index"));
+            } catch (Exception e) {
+                index = -1;
+            }
+            List<PlayTiles.Tile> tiles = PlayTiles.load(context);
+            if (index < 0 || index >= tiles.size()) {
+                send(out, 400, "text/plain", "No such tile".getBytes("UTF-8"));
+                return;
+            }
+            PlayTiles.Tile t = tiles.get(index);
+            t.minutes = 0;   // just trying it: no timer
+            boolean ok = PlayTiles.start(context, t, Apps.load(context));
+            if (!ok) {
+                send(out, 409, "text/plain", "The TV couldn't open that. Is the app installed?".getBytes("UTF-8"));
+                return;
+            }
+            sendJson(out, state());
+        } else if (req.path.equals("/api/scenes")) {
+            String g = req.query.get("group");
+            if (g == null || !Arrays.asList(Scenes.GROUPS).contains(g)) {
+                send(out, 400, "text/plain", "Unknown launcher".getBytes("UTF-8"));
+                return;
+            }
+            if (req.method.equals("POST")) {
+                Scenes.fetchGroup(context, g);
+            } else if (req.method.equals("DELETE")) {
+                Scenes.delete(context, g);
+            }
+            sendJson(out, state());
         } else if (key.equals("POST /api/timer")) {
             JSONObject o = new JSONObject(new String(req.body, "UTF-8"));
             try {
@@ -444,6 +479,13 @@ class RemoteServer extends Thread {
         state.put("ambientMinutes", MainActivity.ambientMinutes(context));
         state.put("board", Board.load(context));
         state.put("play", PlayTiles.json(context));
+        JSONArray scenes = new JSONArray();
+        for (String g : Scenes.GROUPS) {
+            int[] n = Scenes.count(context, g);
+            scenes.put(new JSONObject().put("group", g).put("have", n[0]).put("of", n[1])
+                    .put("bytes", Scenes.bytes(context, g)).put("downloading", Scenes.downloading(g)));
+        }
+        state.put("scenes", scenes);
         JSONArray timers = new JSONArray();
         for (Timers.Timer t : Timers.all()) {
             timers.put(new JSONObject().put("id", t.id).put("label", t.label).put("leftMs", t.leftMs()));

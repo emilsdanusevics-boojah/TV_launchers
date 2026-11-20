@@ -35,6 +35,9 @@ final class MiniRecord extends View {
     private String artist = "";
     private boolean playing;
     private float angle;
+    private String shownTitle = "";     // the shortened text, worked out only when it changes
+    private String shownArtist = "";
+    private String shortenedFor = null;
     private long lastNs;
 
     MiniRecord(Context context) {
@@ -147,10 +150,14 @@ final class MiniRecord extends View {
         float textRight = cx - r - 16 * density;
         float avail = textRight - 4 * density;
         if (avail > 40 * density) {
-            String t = TextUtils.ellipsize(title, titlePaint, avail, TextUtils.TruncateAt.END).toString();
-            String a = TextUtils.ellipsize(artist, artistPaint, avail, TextUtils.TruncateAt.END).toString();
-            c.drawText(t, textRight - titlePaint.measureText(t), cy - 3 * density, titlePaint);
-            c.drawText(a, textRight - artistPaint.measureText(a), cy + 18 * density, artistPaint);
+            String key = title + "\n" + artist + "\n" + (int) avail;
+            if (!key.equals(shortenedFor)) {
+                shortenedFor = key;
+                shownTitle = TextUtils.ellipsize(title, titlePaint, avail, TextUtils.TruncateAt.END).toString();
+                shownArtist = TextUtils.ellipsize(artist, artistPaint, avail, TextUtils.TruncateAt.END).toString();
+            }
+            c.drawText(shownTitle, textRight - titlePaint.measureText(shownTitle), cy - 3 * density, titlePaint);
+            c.drawText(shownArtist, textRight - artistPaint.measureText(shownArtist), cy + 18 * density, artistPaint);
         }
 
         if (playing && getVisibility() == VISIBLE) {

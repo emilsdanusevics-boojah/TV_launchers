@@ -211,6 +211,37 @@ class VinylView extends View {
         gradient.setLocalMatrix(gradientMatrix);
         background.setShader(gradient);
         canvas.drawRect(0, 0, w, h, background);
+        // After sunset the cover's colour glows softly in from the edges, like a lamp.
+        if (System.currentTimeMillis() - glowCheckedAt > 60000) {
+            glowCheckedAt = System.currentTimeMillis();
+            glowOn = DayArc.dark(new java.util.Date());
+        }
+        if (glowOn) {
+            if (glow == null || glowColor != colors[0]) {
+                glowColor = colors[0];
+                int c = brighten(colors[0]);
+                glow = new android.graphics.RadialGradient(w / 2f, h / 2f, (float) Math.hypot(w, h) / 2f,
+                        new int[] {c & 0x00FFFFFF, c & 0x00FFFFFF, (c & 0x00FFFFFF) | 0x59000000},
+                        new float[] {0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
+            }
+            glowPaint.setShader(glow);
+            canvas.drawRect(0, 0, w, h, glowPaint);
+        }
+    }
+
+    private final Paint glowPaint = new Paint();
+    private android.graphics.RadialGradient glow;
+    private int glowColor;
+    private boolean glowOn;
+    private long glowCheckedAt;
+
+    // A lighter, warmer version of a colour, for the evening glow.
+    private static int brighten(int c) {
+        int r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+        r = Math.min(255, (int) (r * 1.6f + 40));
+        g = Math.min(255, (int) (g * 1.5f + 28));
+        b = Math.min(255, (int) (b * 1.3f + 16));
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
     private void build(int d) {

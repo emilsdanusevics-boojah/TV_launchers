@@ -28,7 +28,8 @@ final class Scenes {
 
     // Videos that can be downloaded, by their path (as under assets/).
     private static final String[] DOWNLOADABLE = {"apartment/room_day.mp4", "apartment/room_evening.mp4",
-        "window/rain.mp4", "window/snow.mp4", "window/candle.mp4", "window/summer.mp4", "window/winter.mp4"};
+        "window/rain.mp4", "window/snow.mp4", "window/candle.mp4", "window/summer.mp4", "window/winter.mp4",
+        "fireplace/embers.mp4"};
 
     private static final Map<String, Integer> progress = new HashMap<String, Integer>();   // 0..100 while downloading
     private static final Map<String, Long> failedAt = new HashMap<String, Long>();
@@ -61,6 +62,72 @@ final class Scenes {
             }
         }
         return false;
+    }
+
+    // ---- Managed from the phone page, by launcher ----
+
+    static final String[] GROUPS = {"apartment", "window", "fireplace"};
+
+    static java.util.List<String> group(String name) {
+        java.util.List<String> out = new java.util.ArrayList<String>();
+        for (String p : DOWNLOADABLE) {
+            if (p.startsWith(name + "/")) {
+                out.add(p);
+            }
+        }
+        return out;
+    }
+
+    /** Bytes of this launcher's videos on the TV. */
+    static long bytes(Context context, String name) {
+        long total = 0;
+        for (String p : group(name)) {
+            File f = file(context, p);
+            total += f.isFile() ? f.length() : 0;
+        }
+        return total;
+    }
+
+    /** How many of this launcher's videos are on the TV, of how many. */
+    static int[] count(Context context, String name) {
+        java.util.List<String> paths = group(name);
+        int have = 0;
+        for (String p : paths) {
+            if (file(context, p).isFile()) {
+                have++;
+            }
+        }
+        return new int[] {have, paths.size()};
+    }
+
+    static synchronized boolean downloading(String name) {
+        for (String p : progress.keySet()) {
+            if (p.startsWith(name + "/")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static void fetchGroup(Context context, String name) {
+        synchronized (Scenes.class) {
+            for (String p : group(name)) {
+                failedAt.remove(p);   // asked for: try now
+            }
+        }
+        for (String p : group(name)) {
+            fetch(context, p);
+        }
+    }
+
+    /** Frees the space: the launcher shows its still, and downloads again when next opened. */
+    static void delete(Context context, String name) {
+        for (String p : group(name)) {
+            if (progress(p) < 0) {
+                file(context, p).delete();
+                new File(file(context, p).getPath() + ".part").delete();
+            }
+        }
     }
 
     /** Download progress 0..100, or -1 when not downloading. */

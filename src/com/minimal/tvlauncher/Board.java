@@ -181,6 +181,24 @@ final class Board {
         return all.size() > MAX_LINES ? new ArrayList<String>(all.subList(0, MAX_LINES)) : all;
     }
 
+    /** The first names of the people whose name day or birthday it is today. */
+    static List<String> peopleToday(Context context, Calendar now) {
+        List<String> out = new ArrayList<String>();
+        try {
+            JSONArray people = load(context).getJSONArray("people");
+            for (int i = 0; i < people.length(); i++) {
+                JSONObject p = people.getJSONObject(i);
+                String name = p.optString("name");
+                if (hasNameDay(context, name, now) || p.optString("birthday").equals(monthDay(now))) {
+                    out.add(name);
+                }
+            }
+        } catch (Exception ignored) {
+            // nobody
+        }
+        return out;
+    }
+
     /** Only today's lines (for the pirate to mention). */
     static List<String> todayLines(Context context, Calendar now) {
         List<String> out = new ArrayList<String>();

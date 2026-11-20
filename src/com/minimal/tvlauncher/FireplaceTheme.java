@@ -26,6 +26,11 @@ import java.util.Locale;
  * web/fireplace.html), the clock dim in the corner, and, if chosen, the quiet sound of the
  * fire or of rain. The apps stay out of the way: any button on the remote brings up the app
  * strip, which fades away again after a few seconds without a press.
+ *
+ * The fire burns down with the evening: from 23:00 (or an hour before the bedtime set on the
+ * phone page) it settles into glowing embers (a second loop, downloaded the first time). The
+ * menu's "Burn down" lets it die out over 30, 60 or 90 minutes: embers at once, the sound
+ * fading, then the screen fades to black and the TV may sleep.
  */
 class FireplaceTheme implements LauncherTheme {
 
@@ -36,6 +41,9 @@ class FireplaceTheme implements LauncherTheme {
     private static final int MUTED = PanelMenu.MUTED;
     private static final int ACCENT = 0xFFE59A4F;   // firelight
     private static final int ACCENT_INK = 0xFF1D1A15;
+    private static final String FIRE = "fireplace/fireplace.mp4";
+    private static final String EMBERS = "fireplace/embers.mp4";
+    private static final int[] BURN_MINUTES = {0, 30, 60, 90};
 
     private final MainActivity activity;
     private final Handler handler = new Handler();
@@ -52,6 +60,30 @@ class FireplaceTheme implements LauncherTheme {
     private ImageView gear;
     private PanelMenu menu;
     private MediaPlayer player;
+    private String playing = FIRE;
+    private long burnStart;          // the burn-down started (0 = none)
+    private long burnEnd;
+
+    // Every ten seconds while burning down: fade the sound, and at the end put the TV to sleep.
+    private final Runnable burnTick = new Runnable() {
+        @Override
+        public void run() {
+            if (burnEnd == 0) {
+                return;
+            }
+            long now = System.currentTimeMillis();
+            float left = Math.max(0, (burnEnd - now) / (float) (burnEnd - burnStart));
+            if (player != null) {
+                player.setVolume(SOUND_VOLUME * left, SOUND_VOLUME * left);
+            }
+            if (now >= burnEnd) {
+                burnStart = burnEnd = 0;
+                activity.sleepNow();
+                return;
+            }
+            handler.postDelayed(this, 10000);
+        }
+    };
 
     private final Runnable hideStrip = new Runnable() {
         @Override
@@ -85,7 +117,8 @@ class FireplaceTheme implements LauncherTheme {
 
         FrameLayout root = new FrameLayout(activity);
         root.setBackgroundColor(0xFF000000);
-        fire = new FireView(activity, "fireplace/fireplace.mp4", new Runnable() {
+        playing = wantEmbers() && Scenes.available(activity, EMBERS) ? EMBERS : FIRE;
+        fire = new FireView(activity, playing, new Runnable() {
             @Override
             public void run() {
                 still.animate().alpha(0f).setDuration(400).start();   // the fire is moving now
@@ -96,7 +129,7 @@ class FireplaceTheme implements LauncherTheme {
         still = new ImageView(activity);
         still.setScaleType(ImageView.ScaleType.CENTER_CROP);
         try {
-            still.setImageBitmap(BitmapFactory.decodeStream(activity.getAssets().open("fireplace/fireplace.jpg")));
+            still.setImageBitmap(BitmapFactory.decodeStream(activity.getAssets().open(playing.replace(".mp4", ".jpg"))));
         } catch (Exception ignored) {
             // Black until the fire starts.
         }
@@ -222,22 +255,69 @@ class FireplaceTheme implements LauncherTheme {
         }
     }
 
+    // Late in the evening (or burning down): the embers.
+    private boolean wantEmbers() {
+        if (burnEnd != 0) {
+            return true;
+        }
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        int h = c.get(java.util.Calendar.HOUR_OF_DAY);
+        int bed = DayArc.bedtime(activity);
+        boolean nearBed = bed >= 0 && (h == (bed + 23) % 24 || DayArc.pastBedtime(activity, new Date()));
+        return h >= 23 || h < 5 || nearBed;
+    }
+
+    // Changes between flames and embers, softly: the new still fades in, then the video follows.
+    private void updateFire() {
+        String want = wantEmbers() ? EMBERS : FIRE;
+        if (want.equals(playing)) {
+            return;
+        }
+        if (!Scenes.available(activity, want)) {
+            Scenes.fetch(activity, want);   // next minute, perhaps
+            return;
+        }
+        playing = want;
+        try {
+            final android.graphics.Bitmap b = BitmapFactory.decodeStream(activity.getAssets().open(want.replace(".mp4", ".jpg")));
+            still.setImageBitmap(b);
+        } catch (Exception ignored) {
+            // straight to the video
+        }
+        still.animate().cancel();
+        still.animate().alpha(1f).setDuration(1500).withEndAction(new Runnable() {
+            @Override
+            public void run() {
+                fire.setPath(playing);
+            }
+        }).start();
+    }
+
     @Override
     public void onTimeChanged() {
         Date now = new Date();
         time.setText(DateFormat.format(DateFormat.is24HourFormat(activity) ? "HH:mm" : "h:mm", now));
         date.setText(DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEdMMMM"), now));
         ambientClock.tick();
+        if (fire != null) {
+            updateFire();
+        }
     }
 
     @Override
     public void onResume() {
         fire.onResume();
         startSound();
+        updateFire();
+        if (burnEnd != 0) {
+            handler.removeCallbacks(burnTick);
+            burnTick.run();
+        }
     }
 
     @Override
     public void onPause() {
+        handler.removeCallbacks(burnTick);
         handler.removeCallbacks(hideStrip);
         fire.onPause();
         stopSound();
@@ -279,6 +359,7 @@ class FireplaceTheme implements LauncherTheme {
 
     @Override
     public void onDestroy() {
+        handler.removeCallbacks(burnTick);
         handler.removeCallbacks(hideStrip);
         stopSound();
     }
@@ -365,6 +446,38 @@ class FireplaceTheme implements LauncherTheme {
                 startSound();
                 showSettingsMenu();
                 menu.focus(2);
+            }
+        });
+        final int burning = burnEnd == 0 ? 0 : (int) Math.ceil((burnEnd - System.currentTimeMillis()) / 60000.0);
+        menu.add(PanelMenu.note("Burn down", burning == 0 ? "off" : burning + " min left"), new Runnable() {
+            @Override
+            public void run() {
+                // Off → 30 → 60 → 90 minutes → off.
+                int next = 0;
+                for (int i = 0; i < BURN_MINUTES.length; i++) {
+                    if (burning > 0 && burning <= BURN_MINUTES[i]) {
+                        next = (i + 1) % BURN_MINUTES.length;
+                        break;
+                    }
+                    if (burning == 0) {
+                        next = 1;
+                        break;
+                    }
+                }
+                handler.removeCallbacks(burnTick);
+                if (BURN_MINUTES[next] == 0) {
+                    burnStart = burnEnd = 0;
+                    if (player != null) {
+                        player.setVolume(SOUND_VOLUME, SOUND_VOLUME);
+                    }
+                } else {
+                    burnStart = System.currentTimeMillis();
+                    burnEnd = burnStart + BURN_MINUTES[next] * 60000L;
+                    burnTick.run();
+                }
+                updateFire();
+                showSettingsMenu();
+                menu.focus(3);
             }
         });
         menu.add("Change launcher", new Runnable() {

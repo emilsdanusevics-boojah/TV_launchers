@@ -59,7 +59,8 @@ final class Glance {
         }
         double feels = w.hourFeels[at];
         out.add(Math.round(w.tempC) + "°, feels like " + Math.round(feels) + "° · " + wear(feels));
-        String change = rainChange(w, at);
+        String soon = soon(w, now, at);
+        String change = soon != null ? soon : rainChange(w, at);
         if (change != null) {
             out.add(change);
         }
@@ -157,6 +158,46 @@ final class Glance {
             }
         }
         return now ? (snowy(w.hourCode[at]) ? "Snow all day" : "Rain all day · take an umbrella") : null;
+    }
+
+    // From the quarter-hour forecast: "Rain in about 20 min" or "Dry in about 45 min", within
+    // the next two hours; null if nothing changes that soon (or there's no such forecast).
+    private static String soon(Weather.Now w, Date now, int at) {
+        if (w.quarterTime.length == 0) {
+            return null;
+        }
+        SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm", Locale.ROOT);
+        f.setTimeZone(RIGA);
+        String nowText = f.format(now);
+        int first = -1;
+        for (int i = 0; i < w.quarterTime.length; i++) {
+            if (w.quarterTime[i].compareTo(nowText) >= 0) {
+                first = i;
+                break;
+            }
+        }
+        if (first < 0) {
+            return null;
+        }
+        boolean wetNow = (first > 0 ? w.quarterRain[first - 1] : w.quarterRain[first]) >= 0.05;
+        for (int i = first; i < w.quarterTime.length; i++) {
+            boolean wet = w.quarterRain[i] >= 0.05;
+            if (wet != wetNow) {
+                try {
+                    long minutes = Math.max(5, (f.parse(w.quarterTime[i]).getTime() - now.getTime()) / 60000);
+                    if (minutes > 120) {
+                        return null;
+                    }
+                    long rounded = Math.max(5, Math.round(minutes / 5.0) * 5);
+                    String what = snowy(w.hourCode[at]) ? "Snow" : "Rain";
+                    return wetNow ? "Dry in about " + rounded + " min" : what + " in about " + rounded + " min"
+                            + (what.equals("Rain") ? " · take an umbrella" : "");
+                } catch (Exception e) {
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 
     // Wet in the last twelve hours and at or below freezing now or soon.

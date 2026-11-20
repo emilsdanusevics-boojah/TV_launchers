@@ -44,6 +44,7 @@ class PlayTheme implements LauncherTheme {
     private ImageView gear;
     private PanelMenu menu;
     private AmbientClock ambientClock;
+    private View curtain;    // a warm fade to dark as a tile starts
     private List<Apps.Entry> apps = new ArrayList<Apps.Entry>();
 
     PlayTheme(MainActivity activity) {
@@ -122,6 +123,11 @@ class PlayTheme implements LauncherTheme {
 
         ambientClock = new AmbientClock(activity);
         root.addView(ambientClock, ambientClock.layout());
+        curtain = new View(activity);
+        curtain.setBackgroundColor(0xFF120B06);
+        curtain.setAlpha(0f);
+        curtain.setVisibility(View.GONE);
+        root.addView(curtain, new FrameLayout.LayoutParams(-1, -1));
         return root;
     }
 
@@ -206,7 +212,8 @@ class PlayTheme implements LauncherTheme {
         label.setEllipsize(android.text.TextUtils.TruncateAt.END);
         v.addView(label);
         TextView sub = PanelMenu.text(activity, medium, 13, 0xCCECEBE8);
-        sub.setText(t.link.isEmpty() ? "Opens " + appName(t.pkg) : "Plays in " + appName(t.pkg));
+        sub.setText((t.link.isEmpty() ? "Opens " + appName(t.pkg) : "Plays in " + appName(t.pkg))
+                + (t.minutes > 0 ? " · " + t.minutes + " min" : ""));
         sub.setSingleLine(true);
         v.addView(sub);
 
@@ -219,9 +226,19 @@ class PlayTheme implements LauncherTheme {
         v.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (!PlayTiles.start(activity, t, apps)) {
-                    Toast.makeText(activity, appName(t.pkg) + " isn't installed", Toast.LENGTH_SHORT).show();
-                }
+                // Fade gently to a warm dark, then start it: movie night begins softly.
+                curtain.animate().cancel();
+                curtain.setVisibility(View.VISIBLE);
+                curtain.animate().alpha(1f).setDuration(600).withEndAction(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (!PlayTiles.start(activity, t, apps)) {
+                            curtain.setAlpha(0f);
+                            curtain.setVisibility(View.GONE);
+                            Toast.makeText(activity, appName(t.pkg) + " isn't installed", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                }).start();
             }
         });
         return v;
@@ -274,6 +291,9 @@ class PlayTheme implements LauncherTheme {
 
     @Override
     public void onResume() {
+        curtain.animate().cancel();
+        curtain.setAlpha(0f);
+        curtain.setVisibility(View.GONE);
         if (!menu.isOpen() && grid.findFocus() == null && grid.getChildCount() > 0) {
             ((LinearLayout) grid.getChildAt(0)).getChildAt(0).requestFocus();
         }

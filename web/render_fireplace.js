@@ -2,19 +2,19 @@
 // at 30 frames per second, 1280×720 (the TV scales it up), plus a still of the first frame.
 // Needs Node.js, Playwright's Chromium and ffmpeg (with libx264).
 //
-//   node web/render_fireplace.js <out.mp4> <still.jpg>
+//   node web/render_fireplace.js <out.mp4> <still.jpg> [embers]
 const { chromium } = require("playwright");
 const { spawn, execFileSync } = require("child_process");
 const path = require("path");
 
 const FPS = 30, W = 1280, H = 720;
-const [, , outFile, stillFile] = process.argv;
+const [, , outFile, stillFile, variant] = process.argv;
 
 (async () => {
   const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   page.on("pageerror", e => console.error("page error:", String(e)));
-  await page.goto("file://" + path.resolve(__dirname, "fireplace.html"));
+  await page.goto("file://" + path.resolve(__dirname, "fireplace.html") + (variant ? "?" + variant : ""));
   await page.waitForFunction(() => document.documentElement.classList.contains("ready"), null, { timeout: 60000 });
   const loop = await page.evaluate(() => window.LOOP);
   const total = Math.round(loop * FPS);

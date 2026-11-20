@@ -169,6 +169,8 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
         } else {
             base = new PhotosTheme(this);
         }
+        // Video and slow movement look smoothest at 60 Hz (a 50 Hz TV judders 30 fps loops).
+        OrbitView.preferEvenRefresh(getWindow(), getWindowManager().getDefaultDisplay());
         container = new FrameLayout(this);
         baseView = base.createView();
         container.addView(baseView, new FrameLayout.LayoutParams(-1, -1));
@@ -466,6 +468,13 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             return true;
         }
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            // Faded to black (bedtime or a burnt-down fire): this press just brings it back.
+            if (dayArc != null && dayArc.isOut() && !ambient) {
+                dayArc.relight();
+                swallowKeyUp = event.getKeyCode();
+                restartIdleTimer();
+                return true;
+            }
             // A finished timer is ringing: this press just stops it.
             if (Timers.anyDone()) {
                 Timers.dismissDone();
@@ -483,6 +492,13 @@ public class MainActivity extends Activity implements NowPlaying.Listener, Remot
             restartIdleTimer();
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    /** The fire has burnt down: fade to black over a minute, then let the TV sleep. */
+    void sleepNow() {
+        dayArc.candleOut(60000);
+        handler.removeCallbacks(releaseScreen);
+        handler.postDelayed(releaseScreen, 60000);
     }
 
     // ---- Timers ----

@@ -27,6 +27,7 @@ final class PlayTiles {
         String label;
         String pkg;     // the app's package
         String link;    // "" to just open the app
+        int minutes;    // a time limit: starts a kitchen timer when pressed (0 = none)
     }
 
     private PlayTiles() {
@@ -64,6 +65,7 @@ final class PlayTiles {
             t.label = o.optString("label");
             t.pkg = o.optString("pkg");
             t.link = o.optString("link");
+            t.minutes = o.optInt("minutes", 0);
             if (!t.label.isEmpty() && !t.pkg.isEmpty()) {
                 out.add(t);
             }
@@ -91,7 +93,11 @@ final class PlayTiles {
             if (!link.isEmpty() && !link.matches("^[a-zA-Z][a-zA-Z0-9+.-]*:.+")) {
                 throw new IllegalArgumentException("The link should look like spotify:playlist:… or https://…");
             }
-            out.put(new JSONObject().put("label", label).put("pkg", pkg).put("link", link));
+            int minutes = o.optInt("minutes", 0);
+            if (minutes < 0 || minutes > 240) {
+                throw new IllegalArgumentException("A time limit is up to 240 minutes");
+            }
+            out.put(new JSONObject().put("label", label).put("pkg", pkg).put("link", link).put("minutes", minutes));
         }
         FileOutputStream f = new FileOutputStream(file(context));
         try {
@@ -106,6 +112,20 @@ final class PlayTiles {
      * neither works (the app isn't installed any more).
      */
     static boolean start(Context context, Tile t, List<Apps.Entry> apps) {
+        if (!launch(context, t, apps)) {
+            return false;
+        }
+        if (t.minutes > 0) {
+            try {
+                Timers.add(t.label, t.minutes * 60);   // shows over the launcher when back home
+            } catch (IllegalArgumentException ignored) {
+                // too many timers already
+            }
+        }
+        return true;
+    }
+
+    private static boolean launch(Context context, Tile t, List<Apps.Entry> apps) {
         if (!t.link.isEmpty()) {
             Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(t.link)).setPackage(t.pkg);
             if (Apps.start(context, view)) {

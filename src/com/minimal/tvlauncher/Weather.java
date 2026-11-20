@@ -26,7 +26,8 @@ final class Weather {
             + "&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m"
             + "&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code"
             + "&timezone=Europe%2FRiga&forecast_days=7"
-            + "&hourly=temperature_2m,apparent_temperature,precipitation,weather_code&past_hours=12&forecast_hours=36";
+            + "&hourly=temperature_2m,apparent_temperature,precipitation,weather_code&past_hours=12&forecast_hours=36"
+            + "&minutely_15=precipitation&forecast_minutely_15=12";
     private static final long FRESH_MS = 15 * 60 * 1000;
     private static final TimeZone RIGA = TimeZone.getTimeZone("Europe/Riga");
     private static final String[] COMPASS = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
@@ -47,6 +48,9 @@ final class Weather {
         double[] hourFeels = new double[0];
         double[] hourRain = new double[0];      // precipitation, mm
         String[] hourCode = new String[0];
+        // Quarter-hour by quarter-hour for the next three hours: rain soon or stopping soon.
+        String[] quarterTime = new String[0];
+        double[] quarterRain = new double[0];
         // Day by day for the week ahead, starting today.
         String[] dayDate = new String[0];      // "yyyy-MM-dd"
         double[] dayHigh = new double[0];
@@ -168,6 +172,11 @@ final class Weather {
                     describe(d, (int) dc[i]);
                     now.dayCode[i] = d.code;
                 }
+            }
+            JSONObject minutely = root.optJSONObject("minutely_15");
+            if (minutely != null) {
+                now.quarterTime = strings(minutely.optJSONArray("time"));
+                now.quarterRain = numbers(minutely.optJSONArray("precipitation"), now.quarterTime.length);
             }
             JSONObject hourly = root.optJSONObject("hourly");
             if (hourly != null) {

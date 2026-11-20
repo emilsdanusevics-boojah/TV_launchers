@@ -50,11 +50,16 @@ final class DayArc extends View {
 
     /** At bedtime in ambient mode: down to black over ten minutes. */
     void candleOut() {
+        candleOut(CANDLE_OUT_MS);
+    }
+
+    /** Down to black over {@code ms}. */
+    void candleOut(long ms) {
         if (candleAnim != null) {
             return;
         }
         candleAnim = ValueAnimator.ofFloat(candle, 1f);
-        candleAnim.setDuration(CANDLE_OUT_MS);
+        candleAnim.setDuration(ms);
         candleAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator a) {
@@ -63,6 +68,11 @@ final class DayArc extends View {
             }
         });
         candleAnim.start();
+    }
+
+    /** True while the screen is fading or faded to black. */
+    boolean isOut() {
+        return candleAnim != null || candle > 0.001f;
     }
 
     /** Someone pressed a button: light again at once. */

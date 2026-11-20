@@ -228,7 +228,7 @@ class NowPlaying {
                         art = fetch(metadata.getString(k));
                     }
                 }
-                final Bitmap cover = art;
+                final Bitmap cover = shrink(art);
                 final int[] colors = art == null ? null : AlbumColors.extract(art);
                 main.post(new Runnable() {
                     @Override
@@ -240,6 +240,19 @@ class NowPlaying {
                 });
             }
         }).start();
+    }
+
+    // Covers can arrive very large; nothing on screen needs more than 512 pixels.
+    private static Bitmap shrink(Bitmap art) {
+        if (art == null || Math.max(art.getWidth(), art.getHeight()) <= 512) {
+            return art;
+        }
+        float s = 512f / Math.max(art.getWidth(), art.getHeight());
+        try {
+            return Bitmap.createScaledBitmap(art, Math.max(1, Math.round(art.getWidth() * s)), Math.max(1, Math.round(art.getHeight() * s)), true);
+        } catch (OutOfMemoryError e) {
+            return art;
+        }
     }
 
     private Bitmap fetch(String link) {

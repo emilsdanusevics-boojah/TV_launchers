@@ -64,6 +64,9 @@ class RitsTheme implements LauncherTheme {
     private HourStrip hours;
     private TextView todayText;
     private TextView tomorrowText;
+    private TextView todayHead;
+    private TextView tomorrowHead;
+    private View mastRule;
     private TextView sunText;
     private WeekStrip week;
     private LinearLayout appRow;
@@ -124,7 +127,8 @@ class RitsTheme implements LauncherTheme {
         LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
         dl.topMargin = dp(2);
         page.addView(dateLine, dl);
-        page.addView(rule(true), ruleParams(true, 10));
+        mastRule = rule(true);
+        page.addView(mastRule, ruleParams(true, 10));
 
         // Body: the weather on the left, three short columns on the right.
         LinearLayout body = new LinearLayout(activity);
@@ -153,7 +157,9 @@ class RitsTheme implements LauncherTheme {
         LinearLayout side = new LinearLayout(activity);
         side.setOrientation(LinearLayout.VERTICAL);
         todayText = section(side, "Today", 0);
+        todayHead = heads.get(heads.size() - 1);
         tomorrowText = section(side, "Tomorrow", 10);
+        tomorrowHead = heads.get(heads.size() - 1);
         sunText = section(side, "Sun & moon", 10);
         body.addView(side, new LinearLayout.LayoutParams(0, -1, 1f));
 
@@ -297,7 +303,14 @@ class RitsTheme implements LauncherTheme {
 
         Weather.Now w = Weather.cached();
         headline.setText(w == null ? "No forecast yet" : Math.round(w.tempC) + "°  " + w.summary);
-        List<String> today = Glance.today(w, now);
+        List<String> today = new ArrayList<String>(Glance.today(w, now));
+        // An old forecast (the TV was offline): say how old, and dim it.
+        boolean stale = w != null && System.currentTimeMillis() - w.fetchedAt > 60 * 60 * 1000;
+        if (stale) {
+            today.add("Forecast from " + DateFormat.format("HH:mm", new Date(w.fetchedAt)) + ", not updated since");
+        }
+        headline.setAlpha(stale ? 0.55f : 1f);
+        deck.setAlpha(stale ? 0.7f : 1f);
         deck.setText(today.isEmpty() ? (w == null ? "The weather appears once the TV is online." : "") : TextUtils.join("\n", today));
         hours.setWeather(w, now);
         week.setWeather(w);
@@ -313,7 +326,12 @@ class RitsTheme implements LauncherTheme {
                 todayLines.add(l);
             }
         }
-        todayText.setText(todayLines.isEmpty() ? "Nothing on the board." : bullets(todayLines));
+        todayText.setText(bullets(todayLines));
+        show(todayLines.isEmpty() ? View.GONE : View.VISIBLE, todayHead, todayText);   // empty sections step aside
+        // On a red day, the masthead takes the holiday's colour.
+        int ruleColor = night ? NIGHT_RULE : DAY_RULE;
+        title.setTextColor(red != null ? red.textColor() : (night ? NIGHT_MUTED : DAY_MUTED));
+        mastRule.setBackgroundColor(red != null ? red.accent : ruleColor);
 
         List<String> tomorrowLines = new ArrayList<String>();
         for (String l : Glance.tomorrow(activity, w, now)) {
@@ -326,10 +344,17 @@ class RitsTheme implements LauncherTheme {
                 tomorrowLines.add(l.substring("Tomorrow: ".length()));
             }
         }
-        tomorrowText.setText(tomorrowLines.isEmpty() ? "—" : bullets(tomorrowLines));
+        tomorrowText.setText(bullets(tomorrowLines));
+        show(tomorrowLines.isEmpty() ? View.GONE : View.VISIBLE, tomorrowHead, tomorrowText);
 
         sunText.setText(sunAndMoon(w, now));
         ambientClock.tick();
+    }
+
+    private static void show(int visibility, View... views) {
+        for (View v : views) {
+            v.setVisibility(visibility);
+        }
     }
 
     private static String bullets(List<String> lines) {

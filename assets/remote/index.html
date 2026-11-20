@@ -114,9 +114,19 @@
     </div>
     <div class="row">
       <input type="text" id="playLink" maxlength="500" placeholder="Link (optional), e.g. spotify:playlist:…" aria-label="Link">
+    </div>
+    <div class="row">
+      <select id="playLimit" aria-label="Time limit">
+        <option value="0">No time limit</option>
+        <option value="15">15 min limit</option>
+        <option value="30">30 min limit</option>
+        <option value="45">45 min limit</option>
+        <option value="60">1 hour limit</option>
+        <option value="90">1½ hour limit</option>
+      </select>
       <button type="button" id="playAdd">Add tile</button>
     </div>
-    <p class="hint">Big tiles for the Play launcher, up to six, each starting something in one press. Without a link a tile opens the app. With one it opens straight to that link in the app, for example a Spotify playlist (in Spotify on your phone: Share → Copy link) or a YouTube channel. With no tiles set up, Play shows one per home-screen app.</p>
+    <p class="hint">Big tiles for the Play launcher, up to six, each starting something in one press. Without a link a tile opens the app. With one it opens straight to that link in the app, for example a Spotify playlist (in Spotify on your phone: Share → Copy link) or a YouTube channel. A time limit starts a kitchen timer when the tile is pressed (handy for kids' shows). ▶ tries a tile on the TV straight away, to check its link. With no tiles set up, Play shows one per home-screen app.</p>
   </section>
 
   <section>
@@ -194,6 +204,12 @@
   </section>
 
   <section>
+    <h2>Videos on the TV</h2>
+    <div id="scenes"></div>
+    <p class="hint">The Apartment, Window and late-evening Fireplace videos aren't in the app. The TV downloads them the first time they're needed. Download them ahead of time here, or delete them to free space: the launcher then shows a still and downloads again when next opened.</p>
+  </section>
+
+  <section>
     <h2>Update the launcher</h2>
     <p class="empty" id="version"></p>
     <div id="permission" hidden>
@@ -258,6 +274,7 @@ function render() {
   // Timers and Play tiles
   renderTimers();
   renderPlay();
+  renderScenes();
 
   // Ambient walker
   const pir = $("pirate");
@@ -425,6 +442,34 @@ $("pirateFile").addEventListener("change", async (e) => {
   }
 });
 
+// ---- Downloaded videos ----
+
+const SCENE_NAMES = { apartment: "Apartment room", window: "Window views", fireplace: "Fireplace embers" };
+function renderScenes() {
+  const box = $("scenes");
+  box.innerHTML = "";
+  for (const g of state.scenes || []) {
+    const r = document.createElement("div");
+    r.className = "row";
+    const t = document.createElement("span");
+    t.style.flex = "1";
+    const mb = Math.round(g.bytes / 1048576);
+    t.textContent = SCENE_NAMES[g.group] + " · " + (g.downloading ? "downloading…" : g.have === g.of ? mb + " MB on the TV" : g.have ? g.have + " of " + g.of + " downloaded · " + mb + " MB" : "not downloaded");
+    const get = button("↓", "Download now", g.have === g.of || g.downloading, async () => {
+      state = await api("POST", "/api/scenes?group=" + g.group);
+      render();
+      toast("Downloading on the TV");
+    });
+    const del = button("✕", "Delete", g.have === 0, async () => {
+      state = await api("DELETE", "/api/scenes?group=" + g.group);
+      render();
+      toast("Deleted");
+    });
+    r.append(t, get, del);
+    box.appendChild(r);
+  }
+}
+
 // ---- Timers ----
 
 let timerTick = null;
@@ -510,10 +555,18 @@ function renderPlay() {
     r.className = "row";
     const name = document.createElement("span");
     name.style.flex = "1";
-    name.textContent = t.label + " · " + (labels[t.pkg] || t.pkg) + (t.link ? " · link" : "");
+    name.textContent = t.label + " · " + (labels[t.pkg] || t.pkg) + (t.link ? " · link" : "") + (t.minutes ? " · " + t.minutes + " min" : "");
+    const tryIt = button("▶", "Try on the TV", false, async () => {
+      try {
+        await api("POST", "/api/play/try?index=" + i);
+        toast("Started on the TV");
+      } catch (err) {
+        toast(err.message);
+      }
+    });
     const up = button("↑", "Move up", i === 0, () => { tiles.splice(i - 1, 0, tiles.splice(i, 1)[0]); savePlay("Moved"); });
     const del = button("✕", "Remove", false, () => { tiles.splice(i, 1); savePlay("Removed"); });
-    r.append(name, up, del);
+    r.append(name, tryIt, up, del);
     box.appendChild(r);
   });
   const sel = $("playApp");
@@ -536,7 +589,7 @@ $("playAdd").onclick = () => {
   // A Spotify share link becomes a link the TV's Spotify app opens directly.
   const m = link.match(/^https:\/\/open\.spotify\.com\/(?:intl-[a-z]+\/)?(playlist|album|artist|track|show|episode)\/([A-Za-z0-9]+)/);
   if (m) link = "spotify:" + m[1] + ":" + m[2];
-  state.play.push({ label, pkg, link });
+  state.play.push({ label, pkg, link, minutes: parseInt($("playLimit").value, 10) || 0 });
   $("playLabel").value = $("playLink").value = "";
   savePlay("Added " + label);
 };

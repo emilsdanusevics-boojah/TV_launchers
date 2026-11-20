@@ -10,12 +10,15 @@
 <body><canvas id="c" width="1280" height="720"></canvas>
 <script>
 const LOOP = 20.0;
+// fireplace.html?embers: the same fire burnt down to glowing embers, for late in the evening.
+const EMBERS = location.search.indexOf('embers') >= 0;
 const FRAG = `
 precision highp float;
 uniform float uT;          // seconds, 0 to LOOP
 uniform vec2 uRes;
 const float LOOP = ${LOOP.toFixed(1)};
 const float PI = 3.14159265;
+const float EMB = ${EMBERS ? "1.0" : "0.0"};
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -61,7 +64,7 @@ void main() {
   vec2 p = vec2(uv.x * aspect, uv.y);
   float cx = aspect * 0.5;
   vec2 fireAt = vec2(cx, 0.3);
-  float flicker = 0.86 + 0.06 * wave(7.0, 0.3) + 0.04 * wave(13.0, 1.7) + 0.03 * wave(29.0, 4.1);
+  float flicker = (0.86 + 0.06 * wave(7.0, 0.3) + 0.04 * wave(13.0, 1.7) + 0.03 * wave(29.0, 4.1)) * mix(1.0, 0.6, EMB);
 
   // The opening of the fireplace.
   float ow = 0.62, ob = 0.1, ot = 0.72;
@@ -112,13 +115,13 @@ void main() {
   if (inside && p.y < 0.19) {
     float bed = smoothstep(0.19, 0.12, p.y) * smoothstep(ow * 0.9, ow * 0.5, abs(p.x - cx));
     float sp = smoothstep(0.42, 0.9, noise(p * vec2(55.0, 70.0)) * (0.7 + 0.5 * flow(p * 14.0, 0.15)));
-    col += vec3(1.0, 0.33, 0.05) * bed * sp * 1.3 * flicker;
+    col += vec3(1.0, 0.33, 0.05) * bed * sp * 1.3 * flicker * (1.0 + 1.6 * EMB);   // embers glow brighter as the flames die
   }
 
   // Flames: separate tongues licking up from the logs.
   if (inside) {
     float x = (p.x - cx) / 0.5;
-    float h = (p.y - 0.19) / 0.48;
+    float h = (p.y - 0.19) / mix(0.48, 0.13, EMB);   // embers: only low, short flames
     float sway = 0.04 * wave(3.0, 0.0) + 0.025 * wave(5.0, 2.0);
     float warp = flow(vec2(x * 1.6, h * 1.2), 0.9) - 0.5;
     float n = flow(vec2(x * 4.0 + warp * 1.2 + sway * h * 6.0, h * 1.8), 2.2);
@@ -129,7 +132,7 @@ void main() {
     vec3 fire = mix(vec3(0.55, 0.05, 0.0), vec3(1.0, 0.38, 0.04), smoothstep(0.0, 0.5, fl));
     fire = mix(fire, vec3(1.0, 0.72, 0.3), smoothstep(0.55, 0.9, fl));
     fire = mix(fire, vec3(1.0, 0.93, 0.75), smoothstep(0.92, 1.0, fl) * smoothstep(0.35, 0.0, h));
-    col += fire * fl * 1.15 * flicker;
+    col += fire * fl * 1.15 * flicker * mix(1.0, 0.75, EMB);
     col += vec3(0.55, 0.2, 0.04) * base * 0.12 * flicker;   // glow around the flames
   }
 
@@ -143,7 +146,7 @@ void main() {
     float bark = noise(vec2(p.x * 60.0, p.y * 18.0)) * 0.6 + noise(p * 140.0) * 0.4;
     vec3 wood = mix(vec3(0.05, 0.03, 0.018), vec3(0.16, 0.09, 0.045), bark) * (1.1 - across * 0.5);
     float crack = cracks(p, 7.0) * (0.6 + 0.4 * flow(p * 9.0, 0.3));
-    wood += vec3(1.0, 0.3, 0.05) * crack * flicker * 1.3;
+    wood += vec3(1.0, 0.3, 0.05) * crack * flicker * 1.3 * (1.0 + 1.4 * EMB);
     wood += vec3(0.9, 0.4, 0.1) * smoothstep(0.55, 1.0, across) * 0.35 * flicker;   // rim light
     col = mix(col, wood, smoothstep(r, r * 0.85, dFront));
   }

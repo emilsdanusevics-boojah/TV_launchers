@@ -260,6 +260,7 @@ final class PirateView extends View {
         if (x > w || x < -drawW()) {
             // Off the edge: on to the next place along the coast (or back to the last one).
             pendingScene = scene + dir;
+            preload(pendingScene);
             fade = FADE_TICKS;
             speech = null;
         }
@@ -272,7 +273,7 @@ final class PirateView extends View {
         turnBack = random.nextInt(4) == 0;
         glance = !turnBack && random.nextInt(3) == 0;
         String line = null;
-        if (lines != null && lines.length > 0 && random.nextInt(3) != 0) {
+        if (lines != null && lines.length > 0 && random.nextInt(2) == 0) {
             line = lines[lineIndex++ % lines.length];
         } else if (random.nextInt(4) == 0) {
             line = MUTTERINGS[random.nextInt(MUTTERINGS.length)];
@@ -286,11 +287,49 @@ final class PirateView extends View {
 
     // ---- Drawing ----
 
+    // A scene's picture and where his feet go in it.
+    private static final class SceneArt {
+        int index;
+        Bitmap bitmap;
+        int w;
+        int h;
+        int ground;
+    }
+
+    private volatile SceneArt preloaded;
+
     private Bitmap scene(int i) {
         if (sceneArtIndex == i && sceneArt != null) {
             return sceneArt;
         }
-        sceneArt = null;
+        SceneArt a = preloaded;
+        if (a == null || a.index != i) {
+            a = load(i);   // not ready in time: load it now
+        }
+        preloaded = null;
+        sceneArt = a.bitmap;
+        sceneW = a.w;
+        sceneH = a.h;
+        sceneGround = a.ground;
+        sceneArtIndex = i;
+        return sceneArt;
+    }
+
+    // While the screen fades to black, the next scene loads in the background, so the walk
+    // doesn't hitch when it changes.
+    private void preload(final int index) {
+        final int i = ((index % sceneCount) + sceneCount) % sceneCount;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                preloaded = load(i);
+            }
+        }, "PirateScene").start();
+    }
+
+    private SceneArt load(int i) {
+        SceneArt a = new SceneArt();
+        a.index = i;
         if (i < uploaded.size()) {
             File f = uploaded.get(i);
             BitmapFactory.Options bounds = new BitmapFactory.Options();
@@ -303,25 +342,24 @@ final class PirateView extends View {
                     opts.inSampleSize *= 2;   // a big photo: no need for more than the grid shows
                 }
                 try {
-                    sceneArt = BitmapFactory.decodeFile(f.getPath(), opts);
+                    a.bitmap = BitmapFactory.decodeFile(f.getPath(), opts);
                 } catch (OutOfMemoryError ignored) {
-                    sceneArt = null;
+                    a.bitmap = null;
                 }
-                sceneW = bounds.outWidth;
-                sceneH = bounds.outHeight;
+                a.w = bounds.outWidth;
+                a.h = bounds.outHeight;
                 Matcher m = GROUND_IN_NAME.matcher(f.getName());
-                sceneGround = m.matches() ? Math.min(sceneH - 1, Integer.parseInt(m.group(1)))
-                        : Math.round(sceneH * DEFAULT_GROUND);
+                a.ground = m.matches() ? Math.min(a.h - 1, Integer.parseInt(m.group(1)))
+                        : Math.round(a.h * DEFAULT_GROUND);
             }
         }
-        if (sceneArt == null) {
-            sceneArt = decode(SCENES[i % SCENES.length]);
-            sceneW = sceneArt.getWidth();
-            sceneH = sceneArt.getHeight();
-            sceneGround = BUILT_IN_GROUND;
+        if (a.bitmap == null) {
+            a.bitmap = decode(SCENES[i % SCENES.length]);
+            a.w = a.bitmap.getWidth();
+            a.h = a.bitmap.getHeight();
+            a.ground = BUILT_IN_GROUND;
         }
-        sceneArtIndex = i;
-        return sceneArt;
+        return a;
     }
 
     /** The uploaded sprite sheet if there is a usable one, otherwise the built-in pirate. */
@@ -346,7 +384,12 @@ final class PirateView extends View {
             int frames = Integer.parseInt(m.group(1));
             Bitmap b = null;
             try {
-                b = BitmapFactory.decodeFile(custom.getPath());
+                BitmapFactory.Options bounds = new BitmapFactory.Options();
+                bounds.inJustDecodeBounds = true;
+                BitmapFactory.decodeFile(custom.getPath(), bounds);
+                if ((long) bounds.outWidth * bounds.outHeight <= 4L * 1024 * 1024) {   // no giant sheets
+                    b = BitmapFactory.decodeFile(custom.getPath());
+                }
             } catch (OutOfMemoryError ignored) {
                 // fall back to the built-in pirate
             }

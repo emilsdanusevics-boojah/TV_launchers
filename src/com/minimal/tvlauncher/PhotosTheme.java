@@ -99,6 +99,8 @@ class PhotosTheme implements LauncherTheme {
     private final List<String> recent = new ArrayList<String>();   // shown lately; not again soon
     private long lastMemoryAt;
     private final Random pick = new Random();
+    // One thread decodes the photos, one after another (not a new thread for each).
+    private final java.util.concurrent.ExecutorService decoder = java.util.concurrent.Executors.newSingleThreadExecutor();
     private TextView board;
     private LinearLayout glance;      // the morning / evening card, top right
     private TextView glanceTitle;
@@ -474,6 +476,7 @@ class PhotosTheme implements LauncherTheme {
     public void onDestroy() {
         handler.removeCallbacks(weatherTimer);
         handler.removeCallbacks(nextPhoto);
+        decoder.shutdownNow();
     }
 
     /** Photos were added or removed from the phone: start again with the new set. */
@@ -553,10 +556,10 @@ class PhotosTheme implements LauncherTheme {
         final String photo = choose(caption);
         final boolean asset = builtIn;
         final int req = ++request;
-        new Thread(new Runnable() {
+        decoder.execute(new Runnable() {
             @Override
             public void run() {
-                final Bitmap bitmap = decode(photo, asset);
+                final Bitmap bitmap = fill(decode(photo, asset));
                 activity.runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -570,7 +573,7 @@ class PhotosTheme implements LauncherTheme {
                     }
                 });
             }
-        }).start();
+        });
     }
 
     // Which photo next, and its caption ("from Anna", "2 years ago"):
@@ -708,6 +711,45 @@ class PhotosTheme implements LauncherTheme {
     /** People or notes were changed on the phone. */
     void refreshBoard() {
         showBoard();
+    }
+
+    // A portrait or square photo isn't cropped to fill the screen: it sits whole in the middle,
+    // over a softly blurred, darkened copy of itself that fills the rest.
+    private Bitmap fill(Bitmap photo) {
+        if (photo == null || photo.getWidth() >= photo.getHeight() * 1.45f) {
+            return photo;
+        }
+        try {
+            int w = screenW, h = screenH;
+            Bitmap out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas c = new android.graphics.Canvas(out);
+            android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG);
+            // Blur: shrink to a few dozen pixels, then stretch back with smoothing.
+            float cover = Math.max(48f / photo.getWidth(), 27f / photo.getHeight());
+            Bitmap tiny = Bitmap.createScaledBitmap(photo, Math.max(1, Math.round(photo.getWidth() * cover)),
+                    Math.max(1, Math.round(photo.getHeight() * cover)), true);
+            Bitmap soft = Bitmap.createScaledBitmap(tiny, Math.max(1, tiny.getWidth() * 4), Math.max(1, tiny.getHeight() * 4), true);
+            float s = Math.max(w / (float) soft.getWidth(), h / (float) soft.getHeight());
+            float bw = soft.getWidth() * s, bh = soft.getHeight() * s;
+            c.drawBitmap(soft, null, new android.graphics.RectF((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2), p);
+            c.drawColor(0x66000000);
+            tiny.recycle();
+            soft.recycle();
+            // The photo itself, as tall as the screen, with a soft shadow.
+            float fs = h * 0.92f / photo.getHeight();
+            float fw = photo.getWidth() * fs, fh = photo.getHeight() * fs;
+            android.graphics.RectF dst = new android.graphics.RectF((w - fw) / 2, (h - fh) / 2, (w + fw) / 2, (h + fh) / 2);
+            android.graphics.Paint shadow = new android.graphics.Paint();
+            shadow.setColor(0x55000000);
+            for (int k = 1; k <= 3; k++) {
+                c.drawRect(dst.left - k * 3, dst.top - k * 2, dst.right + k * 3, dst.bottom + k * 4, shadow);
+            }
+            c.drawBitmap(photo, null, dst, p);
+            photo.recycle();
+            return out;
+        } catch (OutOfMemoryError e) {
+            return photo;
+        }
     }
 
     // Decoded a little larger than the screen (for the zoom), no bigger.

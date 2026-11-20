@@ -56,6 +56,7 @@ class ApartmentTheme implements LauncherTheme {
     private TextView weatherLine;
     private TextView holidayLine;
     private TextView fetchLine;      // "Fetching the room video · 34%" the first time
+    private TextView glanceLine;     // today's or tomorrow's weather, like Photos' card
     private LinearLayout bar;
     private LinearLayout appRow;
     private ImageView gear;
@@ -133,6 +134,13 @@ class ApartmentTheme implements LauncherTheme {
         holidayLine = PanelMenu.text(activity, medium, 16, ACCENT);
         holidayLine.setVisibility(View.GONE);
         clock.addView(holidayLine, under(6));
+        glanceLine = PanelMenu.text(activity, medium, 14, FG);
+        glanceLine.setAlpha(0.85f);
+        glanceLine.setSingleLine(false);
+        glanceLine.setMaxLines(2);
+        glanceLine.setShadowLayer(dp(6), 0, dp(1), 0x99000000);
+        glanceLine.setVisibility(View.GONE);
+        clock.addView(glanceLine, under(6));
         fetchLine = PanelMenu.text(activity, medium, 13, MUTED);
         fetchLine.setVisibility(View.GONE);
         clock.addView(fetchLine, under(10));
@@ -230,6 +238,16 @@ class ApartmentTheme implements LauncherTheme {
         }
     }
 
+    // The glance card's first lines, so choosing the cozy room doesn't mean losing the forecast.
+    private void showGlance() {
+        Date now = new Date();
+        java.util.List<String> lines = Glance.lines(activity, Weather.cached(), now);
+        glanceLine.setVisibility(lines.isEmpty() ? View.GONE : View.VISIBLE);
+        if (!lines.isEmpty()) {
+            glanceLine.setText(Glance.title(now) + ": " + android.text.TextUtils.join(" · ", lines.subList(0, Math.min(2, lines.size()))));
+        }
+    }
+
     @Override
     public void setAmbient(boolean ambient) {
         // Just the room and the sky outside.
@@ -247,6 +265,7 @@ class ApartmentTheme implements LauncherTheme {
         time.setText(DateFormat.format(fmt, now));
         date.setText(DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEdMMMM"), now));
         showHoliday();   // a new day may be a red day
+        showGlance();
         ambientClock.tick();
     }
 
@@ -314,6 +333,7 @@ class ApartmentTheme implements LauncherTheme {
             @Override
             public void onWeather(Weather.Now now) {
                 showWeather(now);
+                showGlance();
                 orbit.setWeather(now);
             }
         });

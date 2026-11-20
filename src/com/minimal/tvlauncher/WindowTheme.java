@@ -52,6 +52,7 @@ class WindowTheme implements LauncherTheme {
     private TextView date;
     private TextView fetchLine;
     private String scene;
+    private MistView mist;
     private LinearLayout clock;
     private AmbientClock ambientClock;
     private LinearLayout strip;
@@ -134,7 +135,22 @@ class WindowTheme implements LauncherTheme {
         return "window/" + scene + ".mp4";
     }
 
+    private void updateMist() {
+        Weather.Now w = Weather.cached();
+        boolean cold = w != null && w.tempC <= 3;
+        java.util.List<String> people = Board.peopleToday(activity, java.util.Calendar.getInstance());
+        String text = "";
+        if (!people.isEmpty()) {
+            text = people.get(0) + " \u2665";
+        } else if (activity.getSharedPreferences("launcher", MainActivity.MODE_PRIVATE).getBoolean("holidays", true)
+                && Holidays.today() != null) {
+            text = "\u2665";
+        }
+        mist.set(cold, text);
+    }
+
     private void updateScene() {
+        updateMist();
         String next = sceneFor(new Date(), Weather.cached());
         if (next.equals(scene)) {
             return;
@@ -145,14 +161,31 @@ class WindowTheme implements LauncherTheme {
         waitForVideo.run();
     }
 
+    // The still for the scene, decoded off the main thread; shown at once while the video starts.
     private void showStill() {
-        try {
-            still.setImageBitmap(BitmapFactory.decodeStream(activity.getAssets().open("window/" + scene + ".jpg")));
-        } catch (Exception ignored) {
-            still.setImageDrawable(null);
-        }
+        final String which = scene;
         still.animate().cancel();
         still.setAlpha(1f);
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                android.graphics.Bitmap b = null;
+                try {
+                    b = BitmapFactory.decodeStream(activity.getAssets().open("window/" + which + ".jpg"));
+                } catch (Exception ignored) {
+                    b = null;
+                }
+                final android.graphics.Bitmap bitmap = b;
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (which.equals(scene) && !activity.isDestroyed()) {
+                            still.setImageBitmap(bitmap);
+                        }
+                    }
+                });
+            }
+        }, "WindowStill").start();
     }
 
     private int dp(float v) {
@@ -180,6 +213,9 @@ class WindowTheme implements LauncherTheme {
         still.setScaleType(ImageView.ScaleType.CENTER_CROP);
         root.addView(still, new FrameLayout.LayoutParams(-1, -1));
         showStill();
+        // Condensation on cold days, with a name traced in it on someone's day.
+        mist = new MistView(activity);
+        root.addView(mist, new FrameLayout.LayoutParams(-1, -1));
 
         // The clock, dim in the corner.
         clock = new LinearLayout(activity);
